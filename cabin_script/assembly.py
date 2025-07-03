@@ -1,4 +1,5 @@
 import math
+import cabin_script.window as window
 
 # 装配框架梁柱（不包含窗户两侧的加强柱）
 def gen_assem_main_beam_column(params):
@@ -155,14 +156,14 @@ a.Instance(name='cir_beam-1', part=p, dependent=ON)
 a = mdb.models['Model-1'].rootAssembly
 a.rotate(instanceList=('cir_beam-1', ), axisPoint=(0.0, 0.0, 0.0), 
     axisDirection=(0.0, 1.0, 0.0), angle=-90.0)
-a.translate(instanceList=('cir_beam-1', ), vector=({params["dis"]["value"]}, 0.0, 0.0))
+a.translate(instanceList=('cir_beam-1', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('cir_beam-1', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={params["dis"]["side"]["num"]}, number2=2, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={params["dis"]["side"]["num"]}, number2=2, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2={params["cabin"]["height"]["axis_dis"]}) 
 """
-    if params["window"]["left"]["num"] != 0:
+    if params["window"]["left"]["num"] == 1:
         # 此时舱体左侧存在窗户
-        if params["dis"]["side"]["left_locate"] == params["dis"]["side"]["num"]:
+        if max(params["window"]["left"]["locate"]) == params["dis"]["side"]["num"]:
             # 此时说明窗户在最靠近门的那个位置
             left_num = params["dis"]["side"]["num"] - 2  # 这个参数是侧面柱子中除了窗户两侧的方钢管之外其余的H型钢柱子数量
             s += f"""
@@ -170,9 +171,9 @@ a.LinearInstancePattern(instanceList=('cir_beam-1', ), direction1=(1.0, 0.0,
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['frame_column']
 a.Instance(name='frame_column-2', part=p, dependent=ON)
-a.translate(instanceList=('frame_column-2', ), vector=({params["dis"]["value"] * params["dis"]["side"]["num"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('frame_column-2', ), vector=({params["window"]["width"]["axis_dis"] * params["dis"]["side"]["num"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('frame_column-2', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 
 # 装配并阵列左侧环向主梁（柱）
@@ -180,24 +181,24 @@ a.LinearInstancePattern(instanceList=('frame_column-2', ), direction1=(-1.0, 0.0
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 a.Instance(name='cir_column-2', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-2', ), vector=({params["dis"]["value"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('cir_column-2', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 # 阵列左侧
 a.LinearInstancePattern(instanceList=('cir_column-2', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={left_num}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={left_num}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
         else:
             # 此时说明窗户的位置位于中间的某个位置
-            locate = params["dis"]["side"]["left_locate"]  # 窗户位置
+            locate = max(params["window"]["left"]["locate"])  # 窗户位置
             num = params["dis"]["side"]["num"]  # 柱子的数量
             s += f"""
 # 首先导入框架柱（命名为'frame_column-3'）
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['frame_column']
 a.Instance(name='frame_column-3', part=p, dependent=ON)
-a.translate(instanceList=('frame_column-3', ), vector=({params["dis"]["value"] * locate}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('frame_column-3', ), vector=({params["window"]["width"]["axis_dis"] * locate}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('frame_column-3', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
             if locate == num - 1:
@@ -208,14 +209,14 @@ a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-3'）
 a.Instance(name='cir_column-3', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-3', ), vector=({params["dis"]["value"] * num}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('cir_column-3', ), vector=({params["window"]["width"]["axis_dis"] * num}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 # 接下来需要导入另一边需要阵列的
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-4'）
 a.Instance(name='cir_column-4', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-4', ), vector=({params["dis"]["value"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('cir_column-4', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('cir_column-4', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={num - 3}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={num - 3}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
             elif locate == 2:
@@ -226,9 +227,9 @@ a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-5'）
 a.Instance(name='cir_column-5', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-5', ), vector=({params["dis"]["value"] * num}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('cir_column-5', ), vector=({params["window"]["width"]["axis_dis"] * num}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('cir_column-5', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
     """
             else:
@@ -239,34 +240,65 @@ a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-5'）
 a.Instance(name='cir_column-5', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-5', ), vector=({params["dis"]["value"] * num}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('cir_column-5', ), vector=({params["window"]["width"]["axis_dis"] * num}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('cir_column-5', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 # 接下来需要导入另一边需要阵列的
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-6'）
 a.Instance(name='cir_column-6', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-6', ), vector=({params["dis"]["value"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('cir_column-6', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('cir_column-6', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={locate - 2}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={locate - 2}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
-    else:
+    elif params["window"]["left"]["num"] == 0:
         # 此时左侧不存在窗户，选择柱子挨个阵列即可，命名为"cir_column-ll"
         s += f"""
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 a.Instance(name='cir_column-ll', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-ll', ), vector=({params["dis"]["value"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a.translate(instanceList=('cir_column-ll', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('cir_column-ll', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={params["dis"]["side"]["num"]}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={params["dis"]["side"]["num"]}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
+    elif params["window"]["left"]["num"] > 1:
+        # 首先要找到所有框架柱的编号
+        frame_column_list = window.find_win_frame_column(params["window"]["left"]["locate"])
+        # 紧接着要计算每一个柱子的平移距离
+        frame_column_move_dis_list = []
+        for x in frame_column_list:
+            dis = (x - 1) * params["window"]["width"]["axis_dis"]
+            frame_column_move_dis_list.append(dis)
+        # 接下来将逐个导入框架梁并且平移，统一命名为 lwi
+        for i in range(len(frame_column_move_dis_list)):
+            s += f"""
+a = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['frame_column']
+a.Instance(name='frame_column-lw{i}', part=p, dependent=ON)
+a.translate(instanceList=('frame_column-lw{i}', ), vector=({frame_column_move_dis_list[i]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+"""
+        # 接下来寻找环向主梁的编号
+        main_column_list = window.find_win_main_column(params["window"]["left"]["locate"], params)
+        # 紧接着要计算每一个柱子的平移距离
+        main_column_move_dis_list = []
+        for x in main_column_list:
+            dis = (x - 1) * params["window"]["width"]["axis_dis"]
+            main_column_move_dis_list.append(dis)
+        # 接下来将逐个导入环向主梁并且平移，统一命名为 lwi
+        for i in range(len(main_column_move_dis_list)):
+            s += f"""
+a = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['cir_column']
+a.Instance(name='cir_column-lr{i}', part=p, dependent=ON)
+a.translate(instanceList=('cir_column-lr{i}', ), vector=({main_column_move_dis_list[i]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+"""
 
-    if params["window"]["right"]["num"] != 0:
+    if params["window"]["right"]["num"] == 1:
         # 此时舱体右侧存在窗户
-        if params["dis"]["side"]["right_locate"] == params["dis"]["side"]["num"]:
+        if max(params["window"]["right"]["locate"]) == params["dis"]["side"]["num"]:
             # 此时说明是在最靠近门的边上
             right_num = params["dis"]["side"]["num"] - 2
             s += f"""
@@ -274,9 +306,9 @@ a.LinearInstancePattern(instanceList=('cir_column-ll', ), direction1=(1.0, 0.0,
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['frame_column']
 a.Instance(name='frame_column-4', part=p, dependent=ON)
-a.translate(instanceList=('frame_column-4', ), vector=({params["dis"]["value"] * params["dis"]["side"]["num"]}, 0.0, 0.0))
+a.translate(instanceList=('frame_column-4', ), vector=({params["window"]["width"]["axis_dis"] * params["dis"]["side"]["num"]}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('frame_column-4', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 
 # 装配并阵列右侧环向主梁（柱）
@@ -284,24 +316,24 @@ a.LinearInstancePattern(instanceList=('frame_column-4', ), direction1=(-1.0, 0.0
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 a.Instance(name='cir_column-7', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-7', ), vector=({params["dis"]["value"]}, 0.0, 0.0))
+a.translate(instanceList=('cir_column-7', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
 # 阵列左侧
 a.LinearInstancePattern(instanceList=('cir_column-7', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={right_num}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={right_num}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
         else:
             # 此时说明窗户的位置位于中间位置
-            locate = params["dis"]["side"]["right_locate"]  # 窗户位置
+            locate = max(params["window"]["right"]["locate"])  # 窗户位置
             num = params["dis"]["side"]["num"]  # 窗户可以存在的空间总数
             s += f"""
 # 首先导入框架柱（命名为'frame_column-5）
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['frame_column']
 a.Instance(name='frame_column-5', part=p, dependent=ON)
-a.translate(instanceList=('frame_column-5', ), vector=({params["dis"]["value"] * locate}, 0.0, 0.0))
+a.translate(instanceList=('frame_column-5', ), vector=({params["window"]["width"]["axis_dis"] * locate}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('frame_column-5', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
             if locate == num - 1:
@@ -312,14 +344,14 @@ a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-8'）
 a.Instance(name='cir_column-8', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-8', ), vector=({params["dis"]["value"] * num}, 0.0, 0.0))
+a.translate(instanceList=('cir_column-8', ), vector=({params["window"]["width"]["axis_dis"] * num}, 0.0, 0.0))
 # 接下来需要导入另一边需要阵列的
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-9'）
 a.Instance(name='cir_column-9', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-9', ), vector=({params["dis"]["value"]}, 0.0, 0.0))
+a.translate(instanceList=('cir_column-9', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('cir_column-9', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={num - 3}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={num - 3}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
             elif locate == 2:
@@ -330,9 +362,9 @@ a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-10'）
 a.Instance(name='cir_column-10', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-10', ), vector=({params["dis"]["value"] * num}, 0.0, 0.0))
+a.translate(instanceList=('cir_column-10', ), vector=({params["window"]["width"]["axis_dis"] * num}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('cir_column-10', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
     """
             else:
@@ -343,29 +375,60 @@ a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-10'）
 a.Instance(name='cir_column-10', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-10', ), vector=({params["dis"]["value"] * num}, 0.0, 0.0))
+a.translate(instanceList=('cir_column-10', ), vector=({params["window"]["width"]["axis_dis"] * num}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('cir_column-10', ), direction1=(-1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={num - locate}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 # 接下来需要导入另一边需要阵列的
 p = mdb.models['Model-1'].parts['cir_column']
 # 这里的环向次梁（柱）也是重新导入的（命名为'cir_column-11'）
 a.Instance(name='cir_column-11', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-11', ), vector=({params["dis"]["value"]}, 0.0, 0.0))
+a.translate(instanceList=('cir_column-11', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('cir_column-11', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={locate - 2}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={locate - 2}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
 """
-    else:
+    elif params["window"]["right"]["num"] == 0:
         # 此时右侧不存在窗户，选择柱子挨个阵列即可，命名为"cir_column-rr"
         s += f"""
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_column']
 a.Instance(name='cir_column-rr', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-rr', ), vector=({params["dis"]["value"]}, 0.0, 0.0))
+a.translate(instanceList=('cir_column-rr', ), vector=({params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
 a.LinearInstancePattern(instanceList=('cir_column-rr', ), direction1=(1.0, 0.0, 
-    0.0), direction2=(0.0, 1.0, 0.0), number1={params["dis"]["side"]["num"]}, number2=1, spacing1={params["dis"]["value"]}, 
+    0.0), direction2=(0.0, 1.0, 0.0), number1={params["dis"]["side"]["num"]}, number2=1, spacing1={params["window"]["width"]["axis_dis"]}, 
     spacing2=1.0)
+"""
+    elif params["window"]["right"]["num"] > 1:
+        # 首先要找到所有框架柱的编号
+        frame_column_list = window.find_win_frame_column(params["window"]["right"]["locate"])
+        # 紧接着要计算每一个柱子的平移距离
+        frame_column_move_dis_list = []
+        for x in frame_column_list:
+            dis = (x-1)*params["window"]["width"]["axis_dis"]
+            frame_column_move_dis_list.append(dis)
+        # 接下来将逐个导入框架梁并且平移，统一命名为 rwi
+        for i in range(len(frame_column_move_dis_list)):
+            s += f"""
+a = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['frame_column']
+a.Instance(name='frame_column-rw{i}', part=p, dependent=ON)
+a.translate(instanceList=('frame_column-rw{i}', ), vector=({frame_column_move_dis_list[i]}, 0.0, 0.0))
+"""
+        # 接下来寻找环向主梁的编号
+        main_column_list = window.find_win_main_column(params["window"]["right"]["locate"], params)
+        # 紧接着要计算每一个柱子的平移距离
+        main_column_move_dis_list = []
+        for x in main_column_list:
+            dis = (x - 1) * params["window"]["width"]["axis_dis"]
+            main_column_move_dis_list.append(dis)
+        # 接下来将逐个导入环向主梁并且平移，统一命名为 rwi
+        for i in range(len(main_column_move_dis_list)):
+            s += f"""
+a = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['cir_column']
+a.Instance(name='cir_column-wr{i}', part=p, dependent=ON)
+a.translate(instanceList=('cir_column-wr{i}', ), vector=({main_column_move_dis_list[i]}, 0.0, 0.0))
 """
 
     # 接下来考虑对侧窗户的数量
@@ -378,10 +441,10 @@ a.LinearInstancePattern(instanceList=('cir_column-rr', ), direction1=(1.0, 0.0,
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['frame_column']
 a.Instance(name='frame_column-6', part=p, dependent=ON)
-a.translate(instanceList=('frame_column-6', ), vector=(0.0, 0.0, {axis_gap + (num / 2 - 1) * params["dis"]["value"]}))
+a.translate(instanceList=('frame_column-6', ), vector=(0.0, 0.0, {axis_gap + (num / 2 - 1) * params["window"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('frame_column-6', ), direction1=(1.0, 0.0, 
 0.0), direction2=(0.0, 0.0, 1.0), number1=1, number2=2, spacing1=1.0, 
-spacing2={params["dis"]["value"]})
+spacing2={params["window"]["width"]["axis_dis"]})
 """
         if num != 2:
             # 如果只有两根柱子的话就没有必要再阵列环向次梁（柱）了
@@ -393,13 +456,13 @@ a.Instance(name='cir_column-12', part=p, dependent=ON)
 a.translate(instanceList=('cir_column-12', ), vector=(0.0, 0.0, {axis_gap}))
 a.LinearInstancePattern(instanceList=('cir_column-12', ), direction1=(1.0, 0.0, 
     0.0), direction2=(0.0, 0.0, 1.0), number1=1, number2={int(num / 2 - 1)}, spacing1=1.0, 
-    spacing2={params["dis"]["value"]})
+    spacing2={params["window"]["width"]["axis_dis"]})
 ## 此时完成了右侧的环向次梁（柱）的阵列，再去阵列左侧，步骤同上，重新导入环向主梁（柱）（命名为'cir_column-13'）
 a.Instance(name='cir_column-13', part=p, dependent=ON)
-a.translate(instanceList=('cir_column-13', ), vector=(0.0, 0.0, {axis_gap + (num / 2 + 1) * params["dis"]["value"]}))
+a.translate(instanceList=('cir_column-13', ), vector=(0.0, 0.0, {axis_gap + (num / 2 + 1) * params["window"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('cir_column-13', ), direction1=(1.0, 0.0, 
     0.0), direction2=(0.0, 0.0, 1.0), number1=1, number2={int(num / 2 - 1)}, spacing1=1.0, 
-    spacing2={params["dis"]["value"]})
+    spacing2={params["window"]["width"]["axis_dis"]})
 """
     elif params["window"]["offside"]["num"] == 2:
         # 此时舱体对侧存在两扇窗户，使用 dis -> offside -> num -> num1 或 num2，使用其中的奇数
@@ -408,10 +471,10 @@ a.LinearInstancePattern(instanceList=('cir_column-13', ), direction1=(1.0, 0.0,
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['frame_column']
 a.Instance(name='frame_column-7', part=p, dependent=ON)
-a.translate(instanceList=('frame_column-7', ), vector=(0.0, 0.0, {axis_gap + math.floor(num / 2 - 1) * params["dis"]["value"]}))
+a.translate(instanceList=('frame_column-7', ), vector=(0.0, 0.0, {axis_gap + math.floor(num / 2 - 1) * params["window"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('frame_column-7', ), direction1=(1.0, 0.0, 
 0.0), direction2=(0.0, 0.0, 1.0), number1=1, number2=3, spacing1=1.0, 
-spacing2={params["dis"]["value"]})
+spacing2={params["window"]["width"]["axis_dis"]})
 """
         if num == 5:
             # 如果只有两根柱子的话就没有必要再阵列环向次梁（柱）了
@@ -436,13 +499,13 @@ a.Instance(name='cir_column-16', part=p, dependent=ON)
 a.translate(instanceList=('cir_column-16', ), vector=(0.0, 0.0, {axis_gap}))
 a.LinearInstancePattern(instanceList=('cir_column-16', ), direction1=(1.0, 0.0, 
 0.0), direction2=(0.0, 0.0, 1.0), number1=1, number2=2, spacing1=1.0, 
-spacing2={params["dis"]["value"]})
+spacing2={params["window"]["width"]["axis_dis"]})
 ## 此时完成了右侧的环向次梁（柱）的布置，再去阵列左侧，步骤同上，重新导入环向主梁（柱）（命名为'cir_column-17'）
 a.Instance(name='cir_column-17', part=p, dependent=ON)
 a.translate(instanceList=('cir_column-17', ), vector=(0.0, 0.0, {params["cabin"]["width"]["axis_dis"] - axis_gap}))
 a.LinearInstancePattern(instanceList=('cir_column-17', ), direction1=(1.0, 0.0, 
 0.0), direction2=(0.0, 0.0, -1.0), number1=1, number2=2, spacing1=1.0, 
-spacing2={params["dis"]["value"]})
+spacing2={params["window"]["width"]["axis_dis"]})
 """
     elif params["window"]["offside"]["num"] == 3:
         # 此时存在三扇窗户，此时存在一种极端情况，就是三扇窗刚好占满整个面
@@ -451,10 +514,10 @@ spacing2={params["dis"]["value"]})
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['frame_column']
 a.Instance(name='frame_column-8', part=p, dependent=ON)
-a.translate(instanceList=('frame_column-8', ), vector=(0.0, 0.0, {axis_gap + math.floor(num / 2 - 2) * params["dis"]["value"]}))
+a.translate(instanceList=('frame_column-8', ), vector=(0.0, 0.0, {axis_gap + math.floor(num / 2 - 2) * params["window"]["width"]["axis_dis"]}))
 a.LinearInstancePattern(instanceList=('frame_column-8', ), direction1=(1.0, 0.0, 
 0.0), direction2=(0.0, 0.0, 1.0), number1=1, number2=4, spacing1=1.0, 
-spacing2={params["dis"]["value"]})
+spacing2={params["window"]["width"]["axis_dis"]})
 """
         if num != 4:
             # 如果仅有四根柱子的话就没有必要继续布置柱子了
@@ -479,7 +542,7 @@ a.Instance(name='cir_column-20', part=p, dependent=ON)
 a.translate(instanceList=('cir_column-20', ), vector=(0.0, 0.0, {axis_gap}))
 a.LinearInstancePattern(instanceList=('cir_column-20', ), direction1=(1.0, 0.0, 
     0.0), direction2=(0.0, 0.0, 1.0), number1=1, number2={num}, spacing1=1.0, 
-    spacing2={params["dis"]["value"]})
+    spacing2={params["window"]["width"]["axis_dis"]})
 """
 
     # 接下来装配上下两个面的环向次梁
@@ -491,7 +554,7 @@ a.Instance(name='cir_secd_beam_top-1', part=p, dependent=ON)
 a.translate(instanceList=('cir_secd_beam_top-1',), vector=(0.0, {params["cabin"]["height"]["axis_dis"]}, {params["dis"]["offside"]["axis_gap"]["axis_gap"]}))
 a.LinearInstancePattern(instanceList=('cir_secd_beam_top-1',), direction1=(0.0, 0.0, 1.0), direction2=(0.0, 1.0, 0.0),
     number1={params["dis"]["offside"]["num"]["num"]}, number2=1,
-    spacing1={params["dis"]["value"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
+    spacing1={params["window"]["width"]["axis_dis"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
 # 其次装配下方
 a = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['cir_secd_beam_btm']
@@ -499,7 +562,7 @@ a.Instance(name='cir_secd_beam_btm-1', part=p, dependent=ON)
 a.translate(instanceList=('cir_secd_beam_btm-1',), vector=(0.0, 0.0, {params["dis"]["offside"]["axis_gap"]["axis_gap"]}))
 a.LinearInstancePattern(instanceList=('cir_secd_beam_btm-1',), direction1=(0.0, 0.0, 1.0), direction2=(0.0, 1.0, 0.0),
     number1={params["dis"]["offside"]["num"]["num"]}, number2=1,
-    spacing1={params["dis"]["value"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
+    spacing1={params["window"]["width"]["axis_dis"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
 """
     return s
 
@@ -518,7 +581,7 @@ def gen_assem_door_beam_h(params):
         n = int(num / 2)
         # 计算距离差值
         d = params["cabin"]["width"]["axis_dis"] - params["equip"]["length"]["axis_dis"] - \
-            params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["dis"]["value"]
+            params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["window"]["width"]["axis_dis"]
         if d <= 200.0:
             # 此时不可以外延
             n = int(n-1)
@@ -548,7 +611,7 @@ a = mdb.models['Model-1'].rootAssembly
 a.translate(instanceList=('equip_beam_w_top_door', ), vector=({params["cabin"]["length"]["axis_dis"] - params["equip"]["width"]["axis_dis"]}, {params["cabin"]["height"]["axis_dis"]}, {params["dis"]["offside"]["axis_gap"]["axis_gap"]}))
 a.LinearInstancePattern(instanceList=('equip_beam_w_top_door', ), direction1=(0.0, 
     0.0, 1.0), direction2=(0.0, -1.0, 0.0), number1={int(n)}, number2=1, 
-    spacing1={params["dis"]["value"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
+    spacing1={params["window"]["width"]["axis_dis"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
 # 再导入下方的
 p = mdb.models['Model-1'].parts['equip_beam_w_btm']
 a.Instance(name='equip_beam_w_btm_door', part=p, dependent=ON)
@@ -556,7 +619,7 @@ a = mdb.models['Model-1'].rootAssembly
 a.translate(instanceList=('equip_beam_w_btm_door', ), vector=({params["cabin"]["length"]["axis_dis"] - params["equip"]["width"]["axis_dis"]}, 0.0, {params["dis"]["offside"]["axis_gap"]["axis_gap"]}))
 a.LinearInstancePattern(instanceList=('equip_beam_w_btm_door', ), direction1=(0.0, 
     0.0, 1.0), direction2=(0.0, -1.0, 0.0), number1={int(n)}, number2=1, 
-    spacing1={params["dis"]["value"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
+    spacing1={params["window"]["width"]["axis_dis"]}, spacing2={params["cabin"]["height"]["axis_dis"]})
 """
     return s
 
@@ -565,12 +628,12 @@ def gen_assem_sup_beam(params):
     s = ""
 
     # 首先获取几个相关的参数
-    dis = params["dis"]["value"] # 窗户轴线距离
-    ln = params["window"]["left"]["num"] # 左侧窗户数量
-    ll = params["window"]["left"]["locate"] # 左侧窗户位置
-    rn = params["window"]["right"]["num"] # 右侧窗户数量
-    rl = params["window"]["right"]["locate"] # 右侧窗户位置
-    on = params["window"]["offside"]["num"] # 对侧窗户数量，不需要单独说明位置
+    dis = params["window"]["width"]["axis_dis"] # 窗户轴线距离
+    left_win_num = params["window"]["left"]["num"] # 左侧窗户数量
+    left_win_locate_list = params["window"]["left"]["locate"] # 左侧窗户位置，注意是列表
+    right_win_num = params["window"]["right"]["num"] # 右侧窗户数量
+    right_win_locate_list = params["window"]["right"]["locate"] # 右侧窗户位置，注意是列表
+    offside_win_num = params["window"]["offside"]["num"] # 对侧窗户数量，不需要单独说明位置
     mid_num = params["sup"]["mid"]["num"]
     mid_gap = params["sup"]["mid"]["gap"]
     btm_num = params["sup"]["btm"]["num"]
@@ -684,7 +747,7 @@ a1.translate(instanceList=('sup_beam_dl-2', ), vector=({params["cabin"]["length"
         # 等于1的时候不需要阵列
         if mid_num == 1:
             # 首先去安装舱体右侧的支撑梁，此时需要判断是否有窗户，如果没有窗户直接就可以安装
-            if rn == 0:
+            if right_win_num == 0:
                 s += f"""
 # 首先是右侧
 a1 = mdb.models['Model-1'].rootAssembly
@@ -692,7 +755,8 @@ p = mdb.models['Model-1'].parts['sup_beam_right']
 a1.Instance(name='sup_beam_right-3', part=p, dependent=ON)
 a1.translate(instanceList=('sup_beam_right-3', ), vector=(0.0, {params["window"]["ground_clear"]["axis_dis"]+mid_gap}, 0.0))
 """
-            else: # 此时右侧存在窗户，需要分别引入窗户左右的梁然后分别移动
+            elif right_win_num == 1:
+                # 此时右侧存在窗户，需要分别引入窗户左右的梁然后分别移动
                 s += f"""
 # 首先移动窗户右侧
 a1 = mdb.models['Model-1'].rootAssembly
@@ -703,11 +767,39 @@ a1.translate(instanceList=('sup_beam_right_wr-3', ), vector=(0.0, {params["windo
 a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['sup_beam_right_wl']
 a1.Instance(name='sup_beam_right_wl-3', part=p, dependent=ON)
-a1.translate(instanceList=('sup_beam_right_wl-3', ), vector=({rl*dis}, {params["window"]["ground_clear"]["axis_dis"]+mid_gap}, 0.0))
+a1.translate(instanceList=('sup_beam_right_wl-3', ), vector=({max(right_win_locate_list)*dis}, {params["window"]["ground_clear"]["axis_dis"]+mid_gap}, 0.0))
+"""
+            elif right_win_num >= 2:
+                # 由于窗户不能位于位置 1的空隙内，所以左右肯定都存在支撑梁，所以还是按照原有思路进行两次移动
+                s += f"""
+# 首先移动窗户右侧
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_right_wr']
+a1.Instance(name='sup_beam_right_wr-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_right_wr-3', ), vector=(0.0, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, 0.0))
+# 再移动窗户左侧
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_right_wl']
+a1.Instance(name='sup_beam_right_wl-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_right_wl-3', ), vector=({max(right_win_locate_list) * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, 0.0))
+"""
+                # 接下来需要确定空隙的位置，这里要考虑有空隙以及没空隙两种情况
+                gap_list = window.find_gap_locate(params["window"]["right"]["locate"])
+                if len(gap_list) == 0:
+                    # 此时皆大欢喜
+                    pass
+                else:
+                    # 此时需要窗户宽度长度的单位平移环向支撑梁
+                    for x in gap_list:
+                        s += f"""
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_wg']
+a1.Instance(name='sup_beam_wg_r{x}', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_wg_r{x}', ), vector=({(x-1)*params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, 0.0))
 """
 
             # 接下来安装舱体对侧的支撑梁，同样还是要判断是否存在窗户
-            if on == 0:
+            if offside_win_num == 0:
                 s += f"""
 # 装配对侧
 a1 = mdb.models['Model-1'].rootAssembly
@@ -730,11 +822,11 @@ a1.translate(instanceList=('sup_beam_offside_w-3', ), vector=(0.0, {params["wind
 # 向水平方向阵列
 a1.LinearInstancePattern(instanceList=('sup_beam_offside_w-3', ), direction1=(
     0.0, 0.0, 1.0), direction2=(1.0, 0.0, 0.0), number1=2, number2=1, 
-    spacing1={params["cabin"]["width"]["axis_dis"]-(params["cabin"]["width"]["axis_dis"]-params["window"]["offside"]["num"]*params["dis"]["value"])/2}, spacing2=1.0)
+    spacing1={params["cabin"]["width"]["axis_dis"]-(params["cabin"]["width"]["axis_dis"]-params["window"]["offside"]["num"]*params["window"]["width"]["axis_dis"])/2}, spacing2=1.0)
 """
 
             # 接下来安装舱体左侧的支撑梁，同样还是要判断是否存在窗户
-            if ln == 0:
+            if left_win_num == 0:
                 s += f"""
 # 舱体左侧支撑梁
 a1 = mdb.models['Model-1'].rootAssembly
@@ -742,18 +834,46 @@ p = mdb.models['Model-1'].parts['sup_beam_left']
 a1.Instance(name='sup_beam_left-3', part=p, dependent=ON)
 a1.translate(instanceList=('sup_beam_left-3', ), vector=(0.0, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
 """
-            else:
+            elif left_win_num == 1:
                 s += f"""
 # 首先移动窗户右侧（靠近舱门一侧）
 a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['sup_beam_left_wr']
 a1.Instance(name='sup_beam_left_wr-3', part=p, dependent=ON)
-a1.translate(instanceList=('sup_beam_left_wr-3', ), vector=({ll * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+a1.translate(instanceList=('sup_beam_left_wr-3', ), vector=({max(left_win_locate_list) * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
 # 再移动窗户左侧（远离舱门一侧）
 a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['sup_beam_left_wl']
 a1.Instance(name='sup_beam_left_wl-3', part=p, dependent=ON)
 a1.translate(instanceList=('sup_beam_left_wl-3', ), vector=(0.0, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+"""
+            elif left_win_num >= 2:
+                # 由于窗户不能位于位置 1的空隙内，所以左右肯定都存在支撑梁，所以还是按照原有思路进行两次移动
+                s += f"""
+# 首先移动窗户右侧（靠近舱门一侧）
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_left_wr']
+a1.Instance(name='sup_beam_left_wr-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_left_wr-3', ), vector=({max(left_win_locate_list) * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+# 再移动窗户左侧（远离舱门一侧）
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_left_wl']
+a1.Instance(name='sup_beam_left_wl-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_left_wl-3', ), vector=(0.0, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+"""
+                # 接下来需要确定空隙的位置，这里要考虑有空隙以及没空隙两种情况
+                gap_list = window.find_gap_locate(params["window"]["left"]["locate"])
+                if len(gap_list) == 0:
+                    # 此时皆大欢喜
+                    pass
+                else:
+                    # 此时需要窗户宽度长度的单位平移环向支撑梁
+                    for x in gap_list:
+                        s += f"""
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_wg']
+a1.Instance(name='sup_beam_wg_l{x}', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_wg_l{x}', ), vector=({(x-1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
 """
 
             # 其余的就是不存在窗户的面，逐个面上进行阵列就好了
@@ -780,8 +900,8 @@ a1.translate(instanceList=('sup_beam_dl-3', ), vector=({params["cabin"]["length"
 """
 
         # 此时右侧存在多根支撑梁，需要在高度方向进行阵列，注意还是要判断有无窗户
-        else:
-            if rn == 0:
+        elif mid_num >= 2:
+            if right_win_num == 0:
                 # 此时不存在窗户
                 s += f"""
 # 首先是右侧
@@ -794,7 +914,7 @@ a1.LinearInstancePattern(instanceList=('sup_beam_right-3', ), direction1=(
     0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
     spacing1={mid_gap}, spacing2=1.0)
 """
-            else:
+            elif right_win_num == 1:
                 # 此时存在窗户，需要左右两端分别进行阵列
                 s += f"""
 # 首先移动窗户右侧
@@ -809,13 +929,50 @@ a1.LinearInstancePattern(instanceList=('sup_beam_right_wr-3', ), direction1=(
 a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['sup_beam_right_wl']
 a1.Instance(name='sup_beam_right_wl-3', part=p, dependent=ON)
-a1.translate(instanceList=('sup_beam_right_wl-3', ), vector=({rl*dis}, {params["window"]["ground_clear"]["axis_dis"]+mid_gap}, 0.0))
+a1.translate(instanceList=('sup_beam_right_wl-3', ), vector=({max(right_win_locate_list)*dis}, {params["window"]["ground_clear"]["axis_dis"]+mid_gap}, 0.0))
 a1.LinearInstancePattern(instanceList=('sup_beam_right_wl-3', ), direction1=(
     0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
     spacing1={mid_gap}, spacing2=1.0)
 """
+            elif right_win_num >= 2:
+                # 此时方法同前，只不过多了一步阵列
+                s += f"""
+# 首先移动窗户右侧
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_right_wr']
+a1.Instance(name='sup_beam_right_wr-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_right_wr-3', ), vector=(0.0, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, 0.0))
+a1.LinearInstancePattern(instanceList=('sup_beam_right_wr-3', ), direction1=(
+    0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
+    spacing1={mid_gap}, spacing2=1.0)
+# 再移动窗户左侧
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_right_wl']
+a1.Instance(name='sup_beam_right_wl-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_right_wl-3', ), vector=({max(right_win_locate_list) * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, 0.0))
+a1.LinearInstancePattern(instanceList=('sup_beam_right_wl-3', ), direction1=(
+    0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
+    spacing1={mid_gap}, spacing2=1.0)
+"""
+                # 接下来需要确定空隙的位置，这里要考虑有空隙以及没空隙两种情况
+                gap_list = window.find_gap_locate(params["window"]["right"]["locate"])
+                if len(gap_list) == 0:
+                    # 此时皆大欢喜
+                    pass
+                else:
+                    # 此时需要窗户宽度长度的单位平移环向支撑梁
+                    for x in gap_list:
+                        s += f"""
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_wg']
+a1.Instance(name='sup_beam_wg_r{x}', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_wg_r{x}', ), vector=({(x- 1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, 0.0))
+a1.LinearInstancePattern(instanceList=('sup_beam_wg_r{x}', ), direction1=(
+    0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
+    spacing1={mid_gap}, spacing2=1.0)
+"""
 
-            if on == 0:
+            if offside_win_num == 0:
                 s += f"""
 # 装配对侧
 a1 = mdb.models['Model-1'].rootAssembly
@@ -841,10 +998,10 @@ a1.translate(instanceList=('sup_beam_offside_w-3', ), vector=(0.0, {params["wind
 # 向水平以及高度方向方向阵列
 a1.LinearInstancePattern(instanceList=('sup_beam_offside_w-3', ), direction1=(
     0.0, 0.0, 1.0), direction2=(0.0, 1.0, 0.0), number1=2, number2={mid_num}, 
-    spacing1={params["cabin"]["width"]["axis_dis"] - (params["cabin"]["width"]["axis_dis"] - params["window"]["offside"]["num"] * params["dis"]["value"]) / 2}, spacing2={mid_gap})
+    spacing1={params["cabin"]["width"]["axis_dis"] - (params["cabin"]["width"]["axis_dis"] - params["window"]["offside"]["num"] * params["window"]["width"]["axis_dis"]) / 2}, spacing2={mid_gap})
 """
 
-            if ln == 0:
+            if left_win_num == 0:
                 s += f"""
 # 舱体左侧支撑梁
 a1 = mdb.models['Model-1'].rootAssembly
@@ -855,13 +1012,13 @@ a1.LinearInstancePattern(instanceList=('sup_beam_left-3', ), direction1=(
     0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
     spacing1={mid_gap}, spacing2=1.0)
 """
-            else:
+            elif left_win_num == 1:
                 s += f"""
 # 首先移动窗户右侧（靠近舱门一侧）
 a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['sup_beam_left_wr']
 a1.Instance(name='sup_beam_left_wr-3', part=p, dependent=ON)
-a1.translate(instanceList=('sup_beam_left_wr-3', ), vector=({ll * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+a1.translate(instanceList=('sup_beam_left_wr-3', ), vector=({max(left_win_locate_list) * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
 a1.LinearInstancePattern(instanceList=('sup_beam_left_wr-3', ), direction1=(
     0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
     spacing1={mid_gap}, spacing2=1.0)
@@ -876,6 +1033,42 @@ a1.LinearInstancePattern(instanceList=('sup_beam_left_wl-3', ), direction1=(
 """
 
                 # 其余的就是不存在窗户的面，逐个面上进行阵列就好了
+            elif left_win_num >= 2:
+                s += f"""
+# 首先移动窗户右侧（靠近舱门一侧）
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_left_wr']
+a1.Instance(name='sup_beam_left_wr-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_left_wr-3', ), vector=({max(left_win_locate_list) * dis}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+a1.LinearInstancePattern(instanceList=('sup_beam_left_wr-3', ), direction1=(
+    0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
+    spacing1={mid_gap}, spacing2=1.0)
+# 再移动窗户左侧（远离舱门一侧）
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_left_wl']
+a1.Instance(name='sup_beam_left_wl-3', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_left_wl-3', ), vector=(0.0, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+a1.LinearInstancePattern(instanceList=('sup_beam_left_wl-3', ), direction1=(
+    0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
+    spacing1={mid_gap}, spacing2=1.0)
+"""
+                # 接下来需要确定空隙的位置，这里要考虑有空隙以及没空隙两种情况
+                gap_list = window.find_gap_locate(params["window"]["left"]["locate"])
+                if len(gap_list) == 0:
+                    # 此时皆大欢喜
+                    pass
+                else:
+                    # 此时需要窗户宽度长度的单位平移环向支撑梁
+                    for x in gap_list:
+                        s += f"""
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['sup_beam_wg']
+a1.Instance(name='sup_beam_wg_l{x}', part=p, dependent=ON)
+a1.translate(instanceList=('sup_beam_wg_l{x}', ), vector=({(x-1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"] + mid_gap}, {params["cabin"]["width"]["axis_dis"]}))
+a1.LinearInstancePattern(instanceList=('sup_beam_wg_l{x}', ), direction1=(
+    0.0, 1.0, 0.0), direction2=(0.0, 0.0, 1.0), number1={mid_num}, number2=1, 
+    spacing1={mid_gap}, spacing2=1.0)
+"""
 
         s += f"""
 # 首先是设备间长度方向
@@ -940,6 +1133,7 @@ a1.LinearInstancePattern(instanceList=('sup_beam_top-1', ), direction1=(0.0,
     0.0, 1.0), direction2=(0.0, 1.0, 0.0), number1=2, number2=1, 
     spacing1={params["cabin"]["width"]["axis_dis"]-params["sup"]["top_side"]["gap"]*2}, spacing2={params["cabin"]["height"]["axis_dis"]})
 """
+
     # 接下来处理中间部分的环向支撑梁
     if params["sup"]["top_mid"]["num"] == 1:
         s += f"""
@@ -1003,7 +1197,7 @@ a1.translate(instanceList=('sup_beam_ew_btm-1', ), vector=({params["cabin"]["len
             n = int(num / 2)
             # 计算距离差值
             d = params["cabin"]["width"]["axis_dis"] - params["equip"]["length"]["axis_dis"] - \
-                params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["dis"]["value"]
+                params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["window"]["width"]["axis_dis"]
             if d <= 200.0:
                 # 此时不可以外延
                 n = int(n - 1)
@@ -1134,29 +1328,67 @@ a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['plate_r_whole']
 a1.Instance(name='plate_r_whole-1', part=p, dependent=ON)
 """
-    else:
+    elif params["window"]["right"]["num"] == 1:
         s += f"""
 # 首先装配窗户以及上下位置
 # 窗户
 a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['plate_window']
 a1.Instance(name='plate_window_r-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_window_r-1', ), vector=({(params["window"]["right"]["locate"]-1)*params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]}, 0.0))
+a1.translate(instanceList=('plate_window_r-1', ), vector=({(max(params["window"]["right"]["locate"])-1)*params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]}, 0.0))
 # 窗户上方
 p = mdb.models['Model-1'].parts['plate_window_up']
 a1.Instance(name='plate_window_up_r-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_window_up_r-1', ), vector=({(params["window"]["right"]["locate"]-1)*params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]+params["window"]["height"]["axis_dis"]}, 0.0))
+a1.translate(instanceList=('plate_window_up_r-1', ), vector=({(max(params["window"]["right"]["locate"])-1)*params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]+params["window"]["height"]["axis_dis"]}, 0.0))
 # 窗户下方
 p = mdb.models['Model-1'].parts['plate_window_down']
 a1.Instance(name='plate_window_down_r-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_window_down_r-1', ), vector=({(params["window"]["right"]["locate"]-1)*params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
+a1.translate(instanceList=('plate_window_down_r-1', ), vector=({(max(params["window"]["right"]["locate"])-1)*params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
 # 窗户右侧
 p = mdb.models['Model-1'].parts['plate_r_wr']
 a1.Instance(name='plate_r_wr-1', part=p, dependent=ON)
 # 窗户左侧
 p = mdb.models['Model-1'].parts['plate_r_wl']
 a1.Instance(name='plate_r_wl-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_r_wl-1', ), vector=({params["window"]["right"]["locate"]*params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
+a1.translate(instanceList=('plate_r_wl-1', ), vector=({max(params["window"]["right"]["locate"])*params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
+"""
+    elif params["window"]["right"]["num"] >= 2:
+        # 此时窗户左右两侧还是按照原样进行装配
+        s += f"""
+# 窗户右侧
+p = mdb.models['Model-1'].parts['plate_r_wr']
+a1.Instance(name='plate_r_wr-1', part=p, dependent=ON)
+# 窗户左侧
+p = mdb.models['Model-1'].parts['plate_r_wl']
+a1.Instance(name='plate_r_wl-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_r_wl-1', ), vector=({max(params["window"]["right"]["locate"])*params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
+"""
+        # 窗户及其上下则需要逐次进行导入和平移
+        for x in params["window"]["right"]["locate"]:
+            s += f"""
+# 窗户
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['plate_window']
+a1.Instance(name='plate_window_r{x}-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_r{x}-1', ), vector=({(x-1)*params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]}, 0.0))
+# 窗户上方
+p = mdb.models['Model-1'].parts['plate_window_up']
+a1.Instance(name='plate_window_up_r{x}-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_up_r{x}-1', ), vector=({(x-1)*params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]+params["window"]["height"]["axis_dis"]}, 0.0))
+# 窗户下方
+p = mdb.models['Model-1'].parts['plate_window_down']
+a1.Instance(name='plate_window_down_r{x}-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_down_r{x}-1', ), vector=({(x-1)*params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
+"""
+        # 接下来检测是否存在空隙，如果存在空隙的话还需要把空隙部分填充进去
+        gap_list = window.find_gap_locate(params["window"]["right"]["locate"])
+        if len(gap_list) != 0:
+            for i in range(len(gap_list)):
+                s += f"""
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['plate_window_gap']
+a1.Instance(name='plate_window_gap_r{i}', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_gap_r{i}', ), vector=({(gap_list[i] - 1) * params["window"]["width"]["axis_dis"]}, 0.0, 0.0))
 """
 
     # 装配左侧
@@ -1168,22 +1400,22 @@ p = mdb.models['Model-1'].parts['plate_l_whole']
 a1.Instance(name='plate_l_whole-1', part=p, dependent=ON)
 a1.translate(instanceList=('plate_l_whole-1', ), vector=(0.0, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 """
-    else:
+    elif params["window"]["left"]["num"] == 1:
         s += f"""
 # 首先装配窗户以及上下位置
 # 窗户
 a1 = mdb.models['Model-1'].rootAssembly
 p = mdb.models['Model-1'].parts['plate_window']
 a1.Instance(name='plate_window_l-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_window_l-1', ), vector=({(params["window"]["left"]["locate"] - 1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]}, {params["cabin"]["width"]["axis_dis"]}))
+a1.translate(instanceList=('plate_window_l-1', ), vector=({(max(params["window"]["left"]["locate"]) - 1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]}, {params["cabin"]["width"]["axis_dis"]}))
 # 窗户上方
 p = mdb.models['Model-1'].parts['plate_window_up']
 a1.Instance(name='plate_window_up_l-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_window_up_l-1', ), vector=({(params["window"]["left"]["locate"] - 1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"] + params["window"]["height"]["axis_dis"]}, {params["cabin"]["width"]["axis_dis"]}))
+a1.translate(instanceList=('plate_window_up_l-1', ), vector=({(max(params["window"]["left"]["locate"]) - 1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"] + params["window"]["height"]["axis_dis"]}, {params["cabin"]["width"]["axis_dis"]}))
 # 窗户下方
 p = mdb.models['Model-1'].parts['plate_window_down']
 a1.Instance(name='plate_window_down_l-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_window_down_l-1', ), vector=({(params["window"]["left"]["locate"] - 1) * params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a1.translate(instanceList=('plate_window_down_l-1', ), vector=({(max(params["window"]["left"]["locate"]) - 1) * params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 # 窗户左侧
 p = mdb.models['Model-1'].parts['plate_l_wl']
 a1.Instance(name='plate_l_wl-1', part=p, dependent=ON)
@@ -1191,7 +1423,45 @@ a1.translate(instanceList=('plate_l_wl-1', ), vector=(0.0, 0.0, {params["cabin"]
 # 窗户右侧
 p = mdb.models['Model-1'].parts['plate_l_wr']
 a1.Instance(name='plate_l_wr-1', part=p, dependent=ON)
-a1.translate(instanceList=('plate_l_wr-1', ), vector=({params["window"]["left"]["locate"] * params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+a1.translate(instanceList=('plate_l_wr-1', ), vector=({max(params["window"]["left"]["locate"]) * params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+"""
+    elif params["window"]["left"]["num"] >= 2:
+        # 此时窗户左右两侧还是按照原样进行装配
+        s += f"""
+# 窗户左侧
+p = mdb.models['Model-1'].parts['plate_l_wl']
+a1.Instance(name='plate_l_wl-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_l_wl-1', ), vector=(0.0, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+# 窗户右侧
+p = mdb.models['Model-1'].parts['plate_l_wr']
+a1.Instance(name='plate_l_wr-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_l_wr-1', ), vector=({max(params["window"]["left"]["locate"]) * params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+"""
+        for x in params["window"]["left"]["locate"]:
+            s += f"""
+# 窗户
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['plate_window']
+a1.Instance(name='plate_window_l{x}-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_l{x}-1', ), vector=({(x - 1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"]}, {params["cabin"]["width"]["axis_dis"]}))
+# 窗户上方
+p = mdb.models['Model-1'].parts['plate_window_up']
+a1.Instance(name='plate_window_up_l{x}-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_up_l{x}-1', ), vector=({(x - 1) * params["window"]["width"]["axis_dis"]}, {params["window"]["ground_clear"]["axis_dis"] + params["window"]["height"]["axis_dis"]}, {params["cabin"]["width"]["axis_dis"]}))
+# 窗户下方
+p = mdb.models['Model-1'].parts['plate_window_down']
+a1.Instance(name='plate_window_down_l{x}-1', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_down_l{x}-1', ), vector=({(x - 1) * params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
+"""
+        # 接下来检测是否存在空隙，如果存在空隙的话还需要把空隙部分填充进去
+        gap_list = window.find_gap_locate(params["window"]["left"]["locate"])
+        if len(gap_list) != 0:
+            for i in range(len(gap_list)):
+                s += f"""
+a1 = mdb.models['Model-1'].rootAssembly
+p = mdb.models['Model-1'].parts['plate_window_gap']
+a1.Instance(name='plate_window_gap_l{i}', part=p, dependent=ON)
+a1.translate(instanceList=('plate_window_gap_l{i}', ), vector=({(gap_list[i]-1)*params["window"]["width"]["axis_dis"]}, 0.0, {params["cabin"]["width"]["axis_dis"]}))
 """
 
     # 接下来装配对侧

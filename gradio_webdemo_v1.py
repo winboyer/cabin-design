@@ -1,6 +1,7 @@
 import gradio as gr
 import os
 import json
+import copy
 import requests
 from openai import OpenAI
 import tkinter as tk
@@ -11,26 +12,14 @@ import time
 
 import cabin_processor.iterator as i
 import cabin_processor.submitter as s
+from cabin_result.summary import process_all_folders
+import sys
+import io
+from docx import Document
+from PIL import Image
 
 
-content_str_default = "生成一个舱体长度为12m,窗户宽度为1.25m，舱体右侧开1扇窗户，位置为2，舱体是左侧开1扇窗户，位置为2，的3D结构模型。"
-params = {
-    "舱体长度": 12000.0,
-    "窗户信息": {
-        "宽": 1250.0,
-        "舱体右侧窗户": {
-            "个数": 1,
-            "位置": 2
-        },
-        "舱体左侧窗户": {
-            "个数": 1,
-            "位置": 2
-        },
-        "偏置": {
-            "大小": 2
-        }
-    }
-}
+content_str_default = "生成一个舱体长度为12m,窗户宽度为1.2m，舱体右侧开窗户位置分别为2，4，5，舱体左侧开窗户位置为2，4，3，5，6，的3D结构模型。"
 base_params = {
     "舱体长度": 12000.0,
     "窗户信息": {
@@ -47,6 +36,8 @@ base_params = {
     }
 }
 
+window_widths = [500.0, 700.0, 800.0, 1000.0, 1200.0]
+
 openai_api_key = "NONE" 
 openai_api_base = "http://10.11.205.10:8000/v1"  # 替换为你的vllm部署的DeepSeek API地址
 
@@ -54,6 +45,68 @@ client = OpenAI(api_key=openai_api_key, base_url=openai_api_base)
 
 models = client.models.list()
 model_id = models.data[0].id if models.data else None
+
+log_path =  "cabin.log"
+last_position = 0
+
+def get_log_content():
+    try:
+        if not os.path.exists(log_path):
+            return ""
+        with open(log_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        return "".join(lines)
+    except Exception as e:
+        return f"读取日志失败: {e}"
+
+def read_docx_with_images(folderpath):
+    print("Reading docx file:", folderpath)
+    if not folderpath or not os.path.exists(folderpath):
+        return "", None
+    docx_files = os.path.join(folderpath, "方案比选报告.docx")
+    doc = Document(docx_files)
+
+    elements = []
+    for block in doc.element.body:
+        if block.tag.endswith('}p'):
+            para = block
+            text = "".join([node.text or "" for node in para.iter() if node.tag.endswith('}t')])
+            elements.append(text)
+        elif block.tag.endswith('}tbl'):
+            table = block
+            table_data = []
+            for row in table.iterfind('.//w:tr', namespaces=doc.element.nsmap):
+                row_data = []
+                for cell in row.iterfind('.//w:tc', namespaces=doc.element.nsmap):
+                    cell_text = "".join([node.text or "" for node in cell.iter() if node.tag.endswith('}t')])
+                    row_data.append(cell_text)
+                table_data.append(row_data)
+            elements.append(table_data)
+
+
+    # 整理文本和表格内容
+    text = ""
+    tables_content = []
+    for elem in elements:
+        if isinstance(elem, str):
+            text += elem + "\n"
+        elif isinstance(elem, list):
+            # 格式化表格内容为文本
+            table_str = "\n".join(["\t".join(row) for row in elem])
+            tables_content.append(table_str)
+            text += table_str + "\n"
+
+    # 提取图片并转换为RGB图像
+    images = []
+    rels = doc.part.rels
+    for rel in rels:
+        rel = rels[rel]
+        if "image" in rel.target_ref:
+            image_data = rel.target_part.blob
+            image = Image.open(io.BytesIO(image_data)).convert("RGB")
+            images.append(image)
+
+    return text, images[0:4]  
 
 def convert_keys(data):
     if isinstance(data, dict):
@@ -92,7 +145,7 @@ def llm_chat(user_input, history):
         "请将下面的内容转换为JSON格式，字段包括舱体长度和窗户信息（包含窗户宽、舱体右侧窗户、舱体左侧窗户、偏置等子字段），"
         "确保输出的JSON结构与示例一致，只输出JSON，键名必须使用双引号，不要添加其他内容。\n"
         "示例：\n"
-        f"{params}\n"
+        f"{base_params}\n"
         "内容：\n"
         f"{content_str_default}\n"
         "请输出对应的JSON："
@@ -147,7 +200,7 @@ with gr.Blocks() as demo:
             chatbot = gr.Chatbot(label="需求理解")
             msg = gr.Textbox(label="描述你需要生成的舱体尺寸和窗户信息", value=content_str_default)
             state = gr.State([])
-            require_resp = gr.Textbox(visible=False)  # 隐藏的响应框，用于存储模型回复
+            require_resp = gr.Textbox(visible=False, value=base_params)  # 隐藏的响应框，用于存储模型回复
 
             # 将msg的内容作为llm_chat的输入，在点击send_btn后发送接口请求
             def user_chat(user_message, chat_history):
@@ -186,13 +239,9 @@ with gr.Blocks() as demo:
             # 左侧窗户参数一行两列
             with gr.Row():
                 with gr.Column():
-                    left_window_num = gr.Textbox(label="舱体左侧窗户个数", value=None, placeholder="1", interactive=True)
-                with gr.Column():
                     left_window_locate = gr.Textbox(label="舱体左侧窗户位置", value=None, placeholder="多个位置用逗号分隔", interactive=True)
             # 右侧窗户参数一行两列
             with gr.Row():
-                with gr.Column():
-                    right_window_num = gr.Textbox(label="舱体右侧窗户个数", value=None, placeholder="1", interactive=True)
                 with gr.Column():
                     right_window_locate = gr.Textbox(label="舱体右侧窗户位置", value=None, placeholder="多个位置用逗号分隔", interactive=True)
             # 偏置大小单独一行
@@ -223,8 +272,8 @@ with gr.Blocks() as demo:
                     if "cabin_length" in content_data:
                         cabin_length = content_data.get("cabin_length")
                         window_width = content_data.get("window").get("width")
-                        right_num, right_loc = content_data.get("window").get("right").get("num"), content_data.get("window").get("right").get("locate")
-                        left_num, left_loc = content_data.get("window").get("left").get("num"), content_data.get("window").get("left").get("locate")
+                        right_loc = content_data.get("window").get("right").get("locate")
+                        left_loc = content_data.get("window").get("left").get("locate")
                         offside_num_val = content_data.get("window").get("offside").get("num")
                     else:
                         # 中文key
@@ -232,30 +281,28 @@ with gr.Blocks() as demo:
                         print("cabin_length:", cabin_length)
                         window_width = content_data.get("窗户信息").get("宽")
                         print("window_width:", window_width)
-                        right_num, right_loc = content_data.get("窗户信息").get("舱体右侧窗户").get("个数"), content_data.get("窗户信息").get("舱体右侧窗户").get("位置")
-                        print("right_num:", right_num, "right_loc:", right_loc)
-                        left_num, left_loc = content_data.get("窗户信息").get("舱体左侧窗户").get("个数"), content_data.get("窗户信息").get("舱体左侧窗户").get("位置")
-                        print("left_num:", left_num, "left_loc:", left_loc)
+                        right_loc = content_data.get("窗户信息").get("舱体右侧窗户").get("位置")
+                        print("right_loc:", right_loc)
+                        left_loc = content_data.get("窗户信息").get("舱体左侧窗户").get("位置")
+                        print("left_loc:", left_loc)
                         offside_num_val = content_data.get("窗户信息").get("偏置").get("大小")
                         print("offside_num_val:", offside_num_val)
 
                     return (
                         cabin_length, window_width,
-                        right_num, right_loc,
-                        left_num, left_loc,
+                        right_loc, left_loc,
                         offside_num_val
                     )
                 except Exception as e:
                     gr.Warning(f"数据异常: {e}")
-                    return (None, None, None, None, None, None, None)
+                    return (None, None, None, None, None)
                     
                 
             parse_btn_left.click(
                 fill_value_from_content,
                 inputs=[require_resp],
                 outputs=[cabin_length_input, window_width_input,
-                    right_window_num, right_window_locate,
-                    left_window_num, left_window_locate,
+                    right_window_locate, left_window_locate,
                     offside_num]
             )    
 
@@ -285,17 +332,14 @@ with gr.Blocks() as demo:
         # 控制“生成设计方案”按钮的可用性
         def check_inputs(
             cabin_length, window_width,
-            right_num, right_loc,
-            left_num, left_loc,
+            right_loc, left_loc,
             offside, work_path
         ):
             # 检查所有输入是否都有值且非空
             all_filled = all([
             cabin_length not in (None, "", []),
             window_width not in (None, "", []),
-            right_num not in (None, "", []),
             right_loc not in (None, "", []),
-            left_num not in (None, "", []),
             left_loc not in (None, "", []),
             offside not in (None, "", []),
             work_path not in (None, "", [])
@@ -306,8 +350,7 @@ with gr.Blocks() as demo:
             check_inputs,
             inputs=[
             cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
+            right_window_locate, left_window_locate,
             offside_num, work_path_output
             ],
             outputs=[generate_scheme_btn]
@@ -316,18 +359,7 @@ with gr.Blocks() as demo:
             check_inputs,
             inputs=[
             cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
-            offside_num, work_path_output
-            ],
-            outputs=[generate_scheme_btn]
-        )
-        right_window_num.change(
-            check_inputs,
-            inputs=[
-            cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
+            right_window_locate, left_window_locate,
             offside_num, work_path_output
             ],
             outputs=[generate_scheme_btn]
@@ -336,18 +368,7 @@ with gr.Blocks() as demo:
             check_inputs,
             inputs=[
             cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
-            offside_num, work_path_output
-            ],
-            outputs=[generate_scheme_btn]
-        )
-        left_window_num.change(
-            check_inputs,
-            inputs=[
-            cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
+            right_window_locate, left_window_locate,
             offside_num, work_path_output
             ],
             outputs=[generate_scheme_btn]
@@ -356,8 +377,7 @@ with gr.Blocks() as demo:
             check_inputs,
             inputs=[
             cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
+            right_window_locate, left_window_locate,
             offside_num, work_path_output
             ],
             outputs=[generate_scheme_btn]
@@ -366,8 +386,7 @@ with gr.Blocks() as demo:
             check_inputs,
             inputs=[
             cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
+            right_window_locate, left_window_locate,
             offside_num, work_path_output
             ],
             outputs=[generate_scheme_btn]
@@ -376,8 +395,7 @@ with gr.Blocks() as demo:
             check_inputs,
             inputs=[
             cabin_length_input, window_width_input,
-            right_window_num, right_window_locate,
-            left_window_num, left_window_locate,
+            right_window_locate, left_window_locate,
             offside_num, work_path_output
             ],
             outputs=[generate_scheme_btn]
@@ -386,16 +404,36 @@ with gr.Blocks() as demo:
         with gr.Column():
             
             gr.Markdown("### 生成过程日志")
-            process_output = gr.Textbox(label="生成进度信息", lines=5, interactive=False, elem_id="process-output")
+            log_refresh_btn = gr.Button("刷新日志", interactive=False)
+            process_log = gr.Textbox(label="生成进度信息", lines=10, interactive=False)
+            
+            def check_logfile_exists():
+                if not os.path.exists(log_path):
+                    return gr.update(interactive=False), ""
+                else:
+                    return gr.update(interactive=True)
+                
+            work_path_output.change(
+                check_logfile_exists,
+                inputs=[],
+                outputs=[log_refresh_btn]
+            )
+            log_refresh_btn.click(
+                get_log_content,
+                inputs=[],
+                outputs=[process_log]
+            )
 
         with gr.Column():
             gr.Markdown("### 生成模型结果")
-            result_output = gr.Textbox(label="生成模型信息", lines=10, interactive=False, elem_id="result-output")
-
+            model_refresh_btn = gr.Button("刷新模型信息", interactive=False)
+            modelfile = gr.Textbox(visible=False, value=None)  # 隐藏的响应框，用于存储模型回复
+            result_output = gr.Textbox(label="模型信息", lines=10, interactive=False)
+            images_output = gr.Gallery(label="图片", show_label=True)
+            
             def on_generate_scheme_click(content, 
                                         cabin_length_input, window_width_input,
-                                        right_window_num, right_window_locate,
-                                        left_window_num, left_window_locate,
+                                        right_window_locate, left_window_locate,
                                         offside_num, work_path_output):
 
                 print("Received content:", content)
@@ -427,9 +465,10 @@ with gr.Blocks() as demo:
                 content_data["window"]["width"] = float(window_width_input) if window_width_input else content_data["window"].get("width")
                 if "right" not in content_data["window"]:
                     content_data["window"]["right"] = {}
-                content_data["window"]["right"]["num"] = int(right_window_num) if right_window_num else content_data["window"]["right"].get("num")
                 if right_window_locate:
-                    if ',' in str(right_window_locate):
+                    if right_window_locate.startswith("[") and right_window_locate.endswith("]"):
+                        right_window_locate = right_window_locate[1:-1]  # 去除首尾[]
+                    if ',' in right_window_locate:
                         content_data["window"]["right"]["locate"] = [int(x.strip()) for x in str(right_window_locate).split(',') if x.strip()]
                     else:
                         content_data["window"]["right"]["locate"] = int(right_window_locate)
@@ -437,8 +476,9 @@ with gr.Blocks() as demo:
                     content_data["window"]["right"]["locate"] = content_data["window"]["right"].get("locate")
                 if "left" not in content_data["window"]:
                     content_data["window"]["left"] = {}
-                content_data["window"]["left"]["num"] = int(left_window_num) if left_window_num else content_data["window"]["left"].get("num")
                 if left_window_locate:
+                    if left_window_locate.startswith("[") and left_window_locate.endswith("]"):
+                        left_window_locate = left_window_locate[1:-1]  # 去除首尾[]
                     if ',' in str(left_window_locate):
                         content_data["window"]["left"]["locate"] = [int(x.strip()) for x in str(left_window_locate).split(',') if x.strip()]
                     else:
@@ -449,33 +489,56 @@ with gr.Blocks() as demo:
                     content_data["window"]["offside"] = {}
                 content_data["window"]["offside"]["num"] = int(offside_num) if offside_num else content_data["window"]["offside"].get("num")
 
-                a = i.PartsIterator(content_data, work_path_output)
-                final_df = a.run()
-                print(final_df)
-                print(a.over_limit_df)
+                for k in range(len(window_widths)):
+                    params = copy.deepcopy(content_data)
+                    params["window"]["width"] = window_widths[k]
+                    # globals()[f'params{k + 1}'] = params
+                    
+                    a = i.PartsIterator(params, work_path_output)
+                    a.run()
 
-                # 合并final_df和a.over_limit_df为一个内容字符串
-                result = ""
-                if final_df is not None:
-                    result += "【设计结果】\n"
-                    result += str(final_df) + "\n"
-                if a.over_limit_df is not None and not (isinstance(a.over_limit_df, str) and not a.over_limit_df.strip()):
-                    result += "【超限信息】\n"
-                    result += str(a.over_limit_df)
-                return result
-                # return final_df, a.over_limit_df
-                # yield final_df, a.over_limit_df
+                docx_filepath = process_all_folders(work_path_output)
+                return docx_filepath
 
             generate_scheme_btn.click(
                 on_generate_scheme_click,
                 inputs=[require_resp, 
                         cabin_length_input, window_width_input,
-                        right_window_num, right_window_locate,
-                        left_window_num, left_window_locate,
+                        right_window_locate, left_window_locate,
                         offside_num, work_path_output],
-                outputs=[result_output]
+                outputs=[modelfile]
             )
 
+            def check_modelfile_exists(work_path):
+                if not work_path or not os.path.exists(work_path):
+                    print("工作路径不存在或未设置:", work_path)
+                    return gr.update(interactive=False), ""
+                # 判断路径中是否包含“方案比选报告.docx”
+                if "方案比选报告.docx" in os.path.basename(work_path):
+                    docx_files = work_path
+                else:
+                    docx_files = os.path.join(work_path, "方案比选报告.docx")
+                print("Checking for docx file:", docx_files)
+                if os.path.exists(docx_files):
+                    # 存在docx文件，按钮可点击
+                    return gr.update(interactive=True)
+                else:
+                    # 不存在docx文件，按钮不可点击
+                    print("方案比选报告.docx not found in", work_path)
+                    return gr.update(interactive=False)
+                
+            modelfile.change(
+                check_modelfile_exists,
+                inputs=[modelfile],
+                outputs=[model_refresh_btn]
+            )
+
+            model_refresh_btn.click(
+                read_docx_with_images,
+                inputs=[work_path_output],
+                outputs=[result_output, images_output]
+            )
+            
 # demo.launch()
 demo.launch(server_name='0.0.0.0', server_port=7860, share=True)
 

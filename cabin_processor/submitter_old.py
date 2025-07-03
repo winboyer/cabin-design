@@ -1,17 +1,10 @@
 from cabin_processor.param_validation import ParamValidationError
 from cabin_processor.generator import Generator
-from cabin_result.job_report import create_docx_from_files
-import cabin_processor.tqdm_monitor as monitor
+import cabin_script.monitor as monitor
 import cabin_script.auto as auto
-from cabin_result.log import print_to_log
 import pandas as pd
 import cabin_result.odb_result as odb_result
-import shutil, threading, time, os, json, builtins
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
-pd.set_option('display.max_colwidth', None)
-pd.set_option('display.width', None)
-builtins.print = print_to_log
+import shutil, threading, time
 
 # 执行计算
 class Submitter(Generator):
@@ -32,7 +25,6 @@ class Submitter(Generator):
         if abaqus_error:
             raise ParamValidationError(abaqus_error)
         self.is_running = 0 #计算状态
-
 
     # 用于提交作业进行计算
     def put_into_job(self) -> None:
@@ -100,14 +92,13 @@ mdb.saveAs(pathName="{self.params["output"]["dir"]}" + '/cabin_model')
 
         # 汇总本次计算结果
         self._generate_txt()
-        self._generate_word()
-
-        self.print_result()
 
         if self.iter_cnt is None:
-            print(f"分析已完成！总耗时: {elapsed:.2f} 秒（{minutes}分{seconds:.2f}秒）\n")
+            print("分析已完成")
+            print(f"分析总耗时: {elapsed:.2f} 秒（{minutes}分{seconds:.2f}秒）\n")
         else:
-            print(f"[第 {self.iter_cnt} 轮迭代] 分析已完成！总耗时: {elapsed:.2f} 秒（{minutes}分{seconds:.2f}秒）\n")
+            print(f"[第 {self.iter_cnt} 轮迭代] 分析已完成")
+            print(f"[第 {self.iter_cnt} 轮迭代] 分析总耗时: {elapsed:.2f} 秒（{minutes}分{seconds:.2f}秒）\n")
 
     # 用于检查abaqus是否存在
     @staticmethod
@@ -151,7 +142,7 @@ mdb.saveAs(pathName="{self.params["output"]["dir"]}" + '/cabin_model')
     # 监控线程
     def _run_monitor(self) -> None:
         try:
-            monitor.monitor(self.params["output"]["dir"], self.iter_cnt, self.params["window"]["width"]["value"])
+            monitor.monitor(self.params, self.iter_cnt)
         finally:
             self.is_running = 0
 
@@ -168,6 +159,12 @@ mdb.saveAs(pathName="{self.params["output"]["dir"]}" + '/cabin_model')
 
     # 生成本次计算的txt文档
     def _generate_txt(self) -> None:
+        """
+        生成计算报告 TXT 文档，保存到 self.params["output"]["dir"]。
+        """
+        import os, json
+        import pandas as pd
+
         out_dir = self.params.get("output", {}).get("dir")
         if not out_dir:
             raise ValueError("输出目录未设置: self.params['output']['dir'] 为空")
@@ -492,18 +489,6 @@ mdb.saveAs(pathName="{self.params["output"]["dir"]}" + '/cabin_model')
             fw.write(f"| {'焊点总数'.ljust(col1)} | {weld_str.ljust(col2)} |\n")
             fw.write(sep)
             fw.write("\n")
-
-    # 生成 word文档
-    def _generate_word(self) -> None:
-        create_docx_from_files(self.params["output"]["dir"], "计算结果.docx")
-
-    # 打印计算结果
-    def print_result(self) -> None:
-        print("构件最大应力：")
-        print(self.beam_mises_result)
-        print("构件最大挠度：")
-        print(self.beam_deflection_result)
-        print("钢板最大应力：", self.plate_result)
 
 
 

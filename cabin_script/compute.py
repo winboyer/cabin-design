@@ -1,6 +1,7 @@
 import re, copy, math, hashlib, json
+import cabin_script.window as window
 
-# 更新参数文件中涉及到截面尺寸的部分（包括门窗次梁轴线的位置，窗轴线线宽度，支撑梁间距等）
+# 更新所有构件的截面参数，即在abaqus中输入的
 def update_profile(params: dict):
 
     def get_type_and_size(param):
@@ -91,35 +92,49 @@ def update_profile(params: dict):
         param["parts"]["cir_sup_beam"]["h"] = y4
         param["parts"]["cir_sup_beam"]["i"] = d
         return param
-
     params = get_c_type_params(params)
+    return params
 
+# 更新舱体轴线距离
+def update_axis_dis(params: dict):
     # 更新框架梁柱轴线距离
-    params["cabin"]["length"]["axis_dis"] = params["cabin"]["length"]["value"]-params["parts"]["main_beam_column"]["a"]
-    params["cabin"]["height"]["axis_dis"] = params["cabin"]["height"]["value"]-params["parts"]["main_beam_column"]["a"]
-    params["cabin"]["width"]["axis_dis"] = params["cabin"]["width"]["value"]-params["parts"]["main_beam_column"]["a"]
+    params["cabin"]["length"]["axis_dis"] = params["cabin"]["length"]["value"] - params["parts"]["main_beam_column"][
+        "a"]
+    params["cabin"]["height"]["axis_dis"] = params["cabin"]["height"]["value"] - params["parts"]["main_beam_column"][
+        "a"]
+    params["cabin"]["width"]["axis_dis"] = params["cabin"]["width"]["value"] - params["parts"]["main_beam_column"]["a"]
 
     # 更新设备间轴线距离
-    params["equip"]["length"]["axis_dis"] = params["equip"]["length"]["value"]-params["parts"]["main_beam_column"]["a"]
-    params["equip"]["width"]["axis_dis"] = params["equip"]["width"]["value"]-params["parts"]["main_beam_column"]["a"]
+    params["equip"]["length"]["axis_dis"] = params["equip"]["length"]["value"] - params["parts"]["main_beam_column"][
+        "a"]
+    params["equip"]["width"]["axis_dis"] = params["equip"]["width"]["value"] - params["parts"]["main_beam_column"]["a"]
 
     # 更新门窗轴线距离
     params["door"]["height"]["axis_dis"] = params["door"]["height"]["value"] + params["parts"]["cir_secd_beam"]["c"]
     params["door"]["width"]["axis_dis"] = params["door"]["width"]["value"] + params["parts"]["main_beam_column"]["a"]
 
     # 这个距离是轴线距离，是300 - 窗底次梁宽度一半 - 方钢管宽度一半
-    params["door"]["ground_clear"]["axis_dis"] = params["door"]["ground_clear"]["value"] - params["parts"]["main_beam_column"]["a"] / 2 - params["parts"]["cir_secd_beam"]["c"] / 2
-    params["door"]["top_clear"]["axis_dis"] = params["cabin"]["height"]["axis_dis"] - params["door"]["ground_clear"]["axis_dis"] - params["door"]["height"]["axis_dis"]
+    params["door"]["ground_clear"]["axis_dis"] = params["door"]["ground_clear"]["value"] - \
+                                                 params["parts"]["main_beam_column"]["a"] / 2 - \
+                                                 params["parts"]["cir_secd_beam"]["c"] / 2
+    params["door"]["top_clear"]["axis_dis"] = params["cabin"]["height"]["axis_dis"] - params["door"]["ground_clear"][
+        "axis_dis"] - params["door"]["height"]["axis_dis"]
 
     params["window"]["height"]["axis_dis"] = params["window"]["height"]["value"] + params["parts"]["cir_secd_beam"]["c"]
-    params["window"]["width"]["axis_dis"] = params["window"]["width"]["value"] + params["parts"]["main_beam_column"]["a"]
+    params["window"]["width"]["axis_dis"] = params["window"]["width"]["value"] + params["parts"]["main_beam_column"][
+        "a"]
 
     # 这个距离是轴线距离，是900 - 窗底次梁宽度一半 - 方钢管宽度一半
-    params["window"]["ground_clear"]["axis_dis"] = params["window"]["ground_clear"]["value"] - params["parts"]["main_beam_column"]["a"] / 2 - params["parts"]["cir_secd_beam"]["c"] / 2
-    params["window"]["top_clear"]["axis_dis"] = params["cabin"]["height"]["axis_dis"] - params["window"]["ground_clear"]["axis_dis"] - params["window"]["height"]["axis_dis"]
+    params["window"]["ground_clear"]["axis_dis"] = params["window"]["ground_clear"]["value"] - \
+                                                   params["parts"]["main_beam_column"]["a"] / 2 - \
+                                                   params["parts"]["cir_secd_beam"]["c"] / 2
+    params["window"]["top_clear"]["axis_dis"] = params["cabin"]["height"]["axis_dis"] - \
+                                                params["window"]["ground_clear"]["axis_dis"] - \
+                                                params["window"]["height"]["axis_dis"]
 
-    # 更新环向主梁间距
-    params["dis"]["value"] = params["window"]["width"]["axis_dis"]
+    return params
+
+def update_sup_beam_dis(params:dict) -> dict:
 
     # 更新环向支撑梁的间距
     # 注意，顶部的环向主梁个数的传递位于下一个函数中，因其计算涉及到环向主梁的个数
@@ -127,10 +142,15 @@ def update_profile(params: dict):
     params["sup"]["btm"]["gap"] = params["window"]["ground_clear"]["axis_dis"]/(params["sup"]["btm"]["num"]+1) if params["sup"]["btm"]["num"] != 0 else 0
     params["sup"]["up"]["gap"] = params["window"]["top_clear"]["axis_dis"]/(params["sup"]["up"]["num"]+1) if params["sup"]["up"]["num"] != 0 else 0
 
+    # 传递顶部环向支撑梁的间距。这个间距是距离环向次梁的间距
+    params["sup"]["top_side"]["gap"] = params["dis"]["offside"]["axis_gap"]["axis_gap"] / 2 if \
+    params["sup"]["top_side"]["num"] != 0 else 0
+    params["sup"]["top_mid"]["gap"] = params["window"]["width"]["axis_dis"] / 2 if params["sup"]["top_mid"][
+                                                                                       "num"] != 0 else 0
+
     # 更新顶部剖面的偏移量（指的是输入的坐标整体要往这个方向加上多少，所以都是正值，方钢管不需要）
     params["parts"]["cir_secd_beam"]["move"] = (params["parts"]["main_beam_column"]["a"]-params["parts"]["cir_secd_beam"]["b"])/2
     params["parts"]["cir_sup_beam"]["move"] = (params["parts"]["main_beam_column"]["a"]-params["parts"]["cir_sup_beam"]["a1"])/2
-
 
     return params
 
@@ -170,10 +190,10 @@ def gen_id(part_dict, length=10):
 
     return ''.join(id_chars)
 
-# 计算侧面的环向主梁个数
+# 计算侧面柱子的个数以及间距
 def update_cir_main(params):
 
-    d = params["dis"]["value"]
+    d = params["window"]["width"]["axis_dis"]
 
     # 假设留余宽度为gap，则舱体侧面柱间距乘以个数应当满足以下不等式：
     # 200 ≤ gap < d+200
@@ -227,10 +247,6 @@ def update_cir_main(params):
 
     params["dis"]["offside"]["num"]["num"] = num
     params["dis"]["offside"]["axis_gap"]["axis_gap"] = axis_gap
-
-    # 传递顶部环向支撑梁的间距。这个间距是距离环向次梁的间距
-    params["sup"]["top_side"]["gap"] = params["dis"]["offside"]["axis_gap"]["axis_gap"]/2 if params["sup"]["top_side"]["num"] != 0 else 0
-    params["sup"]["top_mid"]["gap"] = params["dis"]["value"]/2 if params["sup"]["top_mid"]["num"] != 0 else 0
 
     return params
 
@@ -326,13 +342,13 @@ def update_parts_info(params, info_params):
 
     # 接下来是三个面上窗户两侧的框架柱，在计算之前首先要判断是否存在窗户
     # 首先是右侧
-    if params["window"]["right"]["num"] != 0:
+    if params["window"]["right"]["num"] == 1:
         for i in range(2):
 
             column = {
                 "type": params["parts"]["main_beam_column"]["type"],
                 "center_coord": {
-                    "x": params["dis"]["side"]["right_locate"]*params["dis"]["value"] - i*params["dis"]["value"],
+                    "x": max(params["window"]["right"]["locate"])*params["window"]["width"]["axis_dis"] - i*params["window"]["width"]["axis_dis"],
                     "y": params["cabin"]["height"]["axis_dis"]/2,
                     "z": 0.0
                 },
@@ -345,15 +361,55 @@ def update_parts_info(params, info_params):
             }
             part_id = gen_id(column)
             info_params["frame_column"][part_id] = column
+    elif params["window"]["right"]["num"] >= 2:
+        # 此时需要获取框架柱的位置列表
+        column_list = window.find_win_frame_column(params["window"]["right"]["locate"])
+        for i in range(len(column_list)):
+            column = {
+                "type": params["parts"]["main_beam_column"]["type"],
+                "center_coord": {
+                    "x": (column_list[i]-1)*params["window"]["width"]["axis_dis"],
+                    "y": params["cabin"]["height"]["axis_dis"] / 2,
+                    "z": 0.0
+                },
+                "dir": {
+                    "x": 0,
+                    "y": 1,
+                    "z": 0
+                },
+                "length": params["cabin"]["height"]["axis_dis"],
+            }
+            part_id = gen_id(column)
+            info_params["frame_column"][part_id] = column
+
     # 其次是左侧
-    if params["window"]["left"]["num"] != 0:
+    if params["window"]["left"]["num"] == 1:
         for i in range(2):
 
             column = {
                 "type": params["parts"]["main_beam_column"]["type"],
                 "center_coord": {
-                    "x": params["dis"]["side"]["left_locate"]*params["dis"]["value"] - i*params["dis"]["value"],
+                    "x": max(params["window"]["left"]["locate"])*params["window"]["width"]["axis_dis"] - i*params["window"]["width"]["axis_dis"],
                     "y": params["cabin"]["height"]["axis_dis"]/2,
+                    "z": params["cabin"]["width"]["axis_dis"]
+                },
+                "dir": {
+                    "x": 0,
+                    "y": 1,
+                    "z": 0
+                },
+                "length": params["cabin"]["height"]["axis_dis"],
+            }
+            part_id = gen_id(column)
+            info_params["frame_column"][part_id] = column
+    elif params["window"]["left"]["num"] >= 2:
+        column_list = window.find_win_frame_column(params["window"]["left"]["locate"])
+        for i in range(len(column_list)):
+            column = {
+                "type": params["parts"]["main_beam_column"]["type"],
+                "center_coord": {
+                    "x": (column_list[i] - 1) * params["window"]["width"]["axis_dis"],
+                    "y": params["cabin"]["height"]["axis_dis"] / 2,
                     "z": params["cabin"]["width"]["axis_dis"]
                 },
                 "dir": {
@@ -375,7 +431,7 @@ def update_parts_info(params, info_params):
                 "center_coord": {
                     "x": 0.0,
                     "y": params["cabin"]["height"]["axis_dis"] / 2,
-                    "z": (params["cabin"]["width"]["axis_dis"]-params["dis"]["value"]*params["window"]["offside"]["num"])/2 + i*params["dis"]["value"]
+                    "z": (params["cabin"]["width"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["offside"]["num"])/2 + i*params["window"]["width"]["axis_dis"]
                 },
                 "dir": {
                     "x": 0,
@@ -488,7 +544,7 @@ def update_parts_info(params, info_params):
         beam = {
             "type": params["parts"]["cir_main_beam"]["type"],
             "center_coord": {
-                "x": (i+1)*params["dis"]["value"],
+                "x": (i+1)*params["window"]["width"]["axis_dis"],
                 "y": params["cabin"]["height"]["axis_dis"],
                 "z": params["cabin"]["width"]["axis_dis"] / 2
             },
@@ -505,7 +561,7 @@ def update_parts_info(params, info_params):
         beam = {
             "type": params["parts"]["cir_main_beam"]["type"],
             "center_coord": {
-                "x": (i + 1) * params["dis"]["value"],
+                "x": (i + 1) * params["window"]["width"]["axis_dis"],
                 "y": 0.0,
                 "z": params["cabin"]["width"]["axis_dis"] / 2
             },
@@ -529,7 +585,7 @@ def update_parts_info(params, info_params):
             column = {
                 "type": params["parts"]["cir_main_beam"]["type"],
                 "center_coord": {
-                    "x": (i + 1) * params["dis"]["value"],
+                    "x": (i + 1) * params["window"]["width"]["axis_dis"],
                     "y": params["cabin"]["height"]["axis_dis"]/2,
                     "z": 0.0
                 },
@@ -543,16 +599,16 @@ def update_parts_info(params, info_params):
             part_id = gen_id(column)
             info_params["cir_column"][part_id] = column
     # 如果存在窗户的话则需要分开进行统计
-    else:
+    elif params["window"]["right"]["num"] == 1:
         # 此时分别记录窗户左右两边的环向主梁的个数
-        # 首先记录窗户左侧，注意此时窗户不能位于最左端
-        if params["window"]["right"]["locate"] != params["dis"]["side"]["num"]:
-            for i in range(params["dis"]["side"]["num"]-params["window"]["right"]["locate"]):
+        # 首先记录窗户左侧，注意此时窗户不能位于最左端，要不然就没有环向主梁（柱）存在了
+        if max(params["window"]["right"]["locate"]) != params["dis"]["side"]["num"]:
+            for i in range(params["dis"]["side"]["num"]-max(params["window"]["right"]["locate"])):
 
                 column = {
                     "type": params["parts"]["cir_main_beam"]["type"],
                     "center_coord": {
-                        "x": params["dis"]["side"]["num"]*params["dis"]["value"]-i*params["dis"]["value"],
+                        "x": params["dis"]["side"]["num"]*params["window"]["width"]["axis_dis"]-i*params["window"]["width"]["axis_dis"],
                         "y": params["cabin"]["height"]["axis_dis"] / 2,
                         "z": 0.0
                     },
@@ -566,13 +622,13 @@ def update_parts_info(params, info_params):
                 part_id = gen_id(column)
                 info_params["cir_column"][part_id] = column
         # 接着记录窗户右侧
-        if params["window"]["right"]["locate"] != 2:
-            for i in range(params["window"]["right"]["locate"]-2):
+        if max(params["window"]["right"]["locate"]) != 2:
+            for i in range(max(params["window"]["right"]["locate"])-2):
 
                 column = {
                     "type": params["parts"]["cir_main_beam"]["type"],
                     "center_coord": {
-                        "x": (i+1)*params["dis"]["value"],
+                        "x": (i+1)*params["window"]["width"]["axis_dis"],
                         "y": params["cabin"]["height"]["axis_dis"] / 2,
                         "z": 0.0
                     },
@@ -585,6 +641,25 @@ def update_parts_info(params, info_params):
                 }
                 part_id = gen_id(column)
                 info_params["cir_column"][part_id] = column
+    elif params["window"]["right"]["num"] >= 2:
+        main_column_list = window.find_win_main_column(params["window"]["right"]["locate"], params)
+        for i in range(len(main_column_list)):
+            column = {
+                "type": params["parts"]["cir_main_beam"]["type"],
+                "center_coord": {
+                    "x": (main_column_list[i] - 1) * params["window"]["width"]["axis_dis"],
+                    "y": params["cabin"]["height"]["axis_dis"] / 2,
+                    "z": 0.0
+                },
+                "dir": {
+                    "x": 0,
+                    "y": 1,
+                    "z": 0
+                },
+                "length": params["cabin"]["height"]["axis_dis"],
+            }
+            part_id = gen_id(column)
+            info_params["cir_column"][part_id] = column
 
     # 随后统计左侧，方法同上
     if params["window"]["left"]["num"] == 0:
@@ -593,7 +668,7 @@ def update_parts_info(params, info_params):
             beam = {
                 "type": params["parts"]["cir_main_beam"]["type"],
                 "center_coord": {
-                    "x": (i + 1) * params["dis"]["value"],
+                    "x": (i + 1) * params["window"]["width"]["axis_dis"],
                     "y": params["cabin"]["height"]["axis_dis"]/2,
                     "z": params["cabin"]["width"]["axis_dis"]
                 },
@@ -607,16 +682,16 @@ def update_parts_info(params, info_params):
             part_id = gen_id(beam)
             info_params["cir_column"][part_id] = beam
     # 如果存在窗户的话则需要分开进行统计
-    else:
+    elif params["window"]["left"]["num"] == 1:
         # 此时分别记录窗户左右两边的环向主梁的个数
         # 首先记录窗户左侧（也就是远离门的那一侧），注意此时窗户不能位于最左端
-        if params["window"]["left"]["locate"] != 2:
-            for i in range(params["window"]["left"]["locate"]-2):
+        if max(params["window"]["left"]["locate"]) != 2:
+            for i in range(max(params["window"]["left"]["locate"])-2):
 
                 column = {
                     "type": params["parts"]["cir_main_beam"]["type"],
                     "center_coord": {
-                        "x": (i+1)*params["dis"]["value"],
+                        "x": (i+1)*params["window"]["width"]["axis_dis"],
                         "y": params["cabin"]["height"]["axis_dis"] / 2,
                         "z": params["cabin"]["width"]["axis_dis"]
                     },
@@ -630,13 +705,13 @@ def update_parts_info(params, info_params):
                 part_id = gen_id(column)
                 info_params["cir_column"][part_id] = column
         # 随后记录窗户右侧（也就是靠近门的那一侧），此时窗户不能位于最靠近门的那一边
-        if params["window"]["left"]["locate"] != params["dis"]["side"]["num"]:
-            for i in range(params["dis"]["side"]["num"]-params["window"]["left"]["locate"]):
+        if max(params["window"]["left"]["locate"]) != params["dis"]["side"]["num"]:
+            for i in range(params["dis"]["side"]["num"]-max(params["window"]["left"]["locate"])):
 
                 column = {
                     "type": params["parts"]["cir_main_beam"]["type"],
                     "center_coord": {
-                        "x": params["dis"]["side"]["num"]*params["dis"]["value"]-i*params["dis"]["value"],
+                        "x": params["dis"]["side"]["num"]*params["window"]["width"]["axis_dis"]-i*params["window"]["width"]["axis_dis"],
                         "y": params["cabin"]["height"]["axis_dis"] / 2,
                         "z": params["cabin"]["width"]["axis_dis"]
                     },
@@ -649,6 +724,26 @@ def update_parts_info(params, info_params):
                 }
                 part_id = gen_id(column)
                 info_params["cir_column"][part_id] = column
+    elif params["window"]["left"]["num"] >= 2:
+
+        main_column_list = window.find_win_main_column(params["window"]["left"]["locate"], params)
+        for i in range(len(main_column_list)):
+            column = {
+                "type": params["parts"]["cir_main_beam"]["type"],
+                "center_coord": {
+                    "x": (main_column_list[i] - 1) * params["window"]["width"]["axis_dis"],
+                    "y": params["cabin"]["height"]["axis_dis"] / 2,
+                    "z": params["cabin"]["width"]["axis_dis"]
+                },
+                "dir": {
+                    "x": 0,
+                    "y": 1,
+                    "z": 0
+                },
+                "length": params["cabin"]["height"]["axis_dis"],
+            }
+            part_id = gen_id(column)
+            info_params["cir_column"][part_id] = column
 
     # 最后统计对侧，方法也差不多
     if params["window"]["offside"]["num"] == 0:
@@ -659,7 +754,7 @@ def update_parts_info(params, info_params):
                 "center_coord": {
                     "x": 0.0,
                     "y": params["cabin"]["height"]["axis_dis"] / 2,
-                    "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i * params["dis"]["value"]
+                    "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i * params["window"]["width"]["axis_dis"]
                 },
                 "dir": {
                     "x": 0,
@@ -686,7 +781,7 @@ def update_parts_info(params, info_params):
                 "center_coord": {
                     "x": 0.0,
                     "y": params["cabin"]["height"]["axis_dis"] / 2,
-                    "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i*params["dis"]["value"]
+                    "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i*params["window"]["width"]["axis_dis"]
                 },
                 "dir": {
                     "x": 0,
@@ -706,7 +801,7 @@ def update_parts_info(params, info_params):
                 "center_coord": {
                     "x": 0.0,
                     "y": params["cabin"]["height"]["axis_dis"] / 2,
-                    "z": params["cabin"]["width"]["axis_dis"]-params["dis"]["offside"]["axis_gap"]["axis_gap"] - i * params["dis"]["value"]
+                    "z": params["cabin"]["width"]["axis_dis"]-params["dis"]["offside"]["axis_gap"]["axis_gap"] - i * params["window"]["width"]["axis_dis"]
                 },
                 "dir": {
                     "x": 0,
@@ -868,7 +963,7 @@ def update_parts_info(params, info_params):
     coord_list = []
     for z in range(params["dis"]["offside"]["num"]["num"]):
         for y in range(2):
-            coord_list.append((cen_x, y*params["cabin"]["height"]["axis_dis"], params["dis"]["offside"]["axis_gap"]["axis_gap"]+z*params["dis"]["value"]))
+            coord_list.append((cen_x, y*params["cabin"]["height"]["axis_dis"], params["dis"]["offside"]["axis_gap"]["axis_gap"]+z*params["window"]["width"]["axis_dis"]))
     for coord in coord_list:
 
         beam = {
@@ -939,7 +1034,7 @@ def update_parts_info(params, info_params):
                     "center_coord": {
                         "x": params["cabin"]["length"]["axis_dis"] - params["equip"]["width"]["axis_dis"] / 2,
                         "y": y*params["cabin"]["height"]["axis_dis"],
-                        "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i*params["dis"]["value"]
+                        "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i*params["window"]["width"]["axis_dis"]
                     },
                     "dir": {
                         "x": 1,
@@ -955,7 +1050,7 @@ def update_parts_info(params, info_params):
         n = int(num / 2)
         # 计算距离差值
         d = params["cabin"]["width"]["axis_dis"] - params["equip"]["length"]["axis_dis"] - \
-            params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["dis"]["value"]
+            params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["window"]["width"]["axis_dis"]
         if d <= 200.0:
             # 此时不可以外延
             n -= 1
@@ -967,7 +1062,7 @@ def update_parts_info(params, info_params):
                     "center_coord": {
                         "x": params["cabin"]["length"]["axis_dis"] - params["equip"]["width"]["axis_dis"] / 2,
                         "y": y * params["cabin"]["height"]["axis_dis"],
-                        "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i * params["dis"]["value"]
+                        "z": params["dis"]["offside"]["axis_gap"]["axis_gap"] + i * params["window"]["width"]["axis_dis"]
                     },
                     "dir": {
                         "x": 1,
@@ -1334,13 +1429,13 @@ def update_parts_info(params, info_params):
             }
             part_id = gen_id(beam)
             info_params["sup_beam_dl"][part_id] = beam
-    else:
+    elif params["window"]["right"]["num"] == 1:
         # 此时存在窗户，需要分别按照窗户两端进行统计，首先统计右边
         for i in range(params["sup"]["mid"]["num"]):
             beam = {
                 "type": params["parts"]["cir_sup_beam"]["type"],
                 "center_coord": {
-                    "x": (params["window"]["right"]["locate"]-1)*params["window"]["width"]["axis_dis"]/2,
+                    "x": (max(params["window"]["right"]["locate"])-1)*params["window"]["width"]["axis_dis"]/2,
                     "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
                     "z": 0.0
                 },
@@ -1349,7 +1444,7 @@ def update_parts_info(params, info_params):
                     "y": 0,
                     "z": 0
                 },
-                "length": (params["window"]["right"]["locate"]-1)*params["window"]["width"]["axis_dis"]
+                "length": (max(params["window"]["right"]["locate"])-1)*params["window"]["width"]["axis_dis"]
             }
             part_id = gen_id(beam)
             info_params["sup_beam_right_wr"][part_id] = beam
@@ -1358,7 +1453,7 @@ def update_parts_info(params, info_params):
             beam = {
                 "type": params["parts"]["cir_sup_beam"]["type"],
                 "center_coord": {
-                    "x": (params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["right"]["locate"])/2+params["window"]["width"]["axis_dis"]*params["window"]["right"]["locate"],
+                    "x": (params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["right"]["locate"]))/2+params["window"]["width"]["axis_dis"]*max(params["window"]["right"]["locate"]),
                     "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
                     "z": 0.0
                 },
@@ -1367,10 +1462,75 @@ def update_parts_info(params, info_params):
                     "y": 0,
                     "z": 0
                 },
-                "length": params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["right"]["locate"]
+                "length": params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["right"]["locate"])
             }
             part_id = gen_id(beam)
             info_params["sup_beam_right_wl"][part_id] = beam
+    elif params["window"]["right"]["num"] >= 2:
+        # 此时还是要讨论空隙数量，没有空隙最好
+        gap_list =  window.find_gap_locate(params["window"]["right"]["locate"])
+        # 无论窗户之间有没有缝隙，左右两侧的都是要统计的
+        # 首先是窗户右侧
+        for i in range(params["sup"]["mid"]["num"]):
+            beam = {
+                "type": params["parts"]["cir_sup_beam"]["type"],
+                "center_coord": {
+                    "x": (min(params["window"]["right"]["locate"]) - 1) * params["window"]["width"]["axis_dis"] / 2,
+                    "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
+                    "z": 0.0
+                },
+                "dir": {
+                    "x": 1,
+                    "y": 0,
+                    "z": 0
+                },
+                "length": (min(params["window"]["right"]["locate"]) - 1) * params["window"]["width"]["axis_dis"]
+            }
+            part_id = gen_id(beam)
+            info_params["sup_beam_right_wr"][part_id] = beam
+
+            # 再统计窗户左侧
+            beam = {
+                "type": params["parts"]["cir_sup_beam"]["type"],
+                "center_coord": {
+                    "x": (params["cabin"]["length"]["axis_dis"] - params["window"]["width"]["axis_dis"] * max(
+                        params["window"]["right"]["locate"])) / 2 + params["window"]["width"]["axis_dis"] * max(
+                        params["window"]["right"]["locate"]),
+                    "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
+                    "z": 0.0
+                },
+                "dir": {
+                    "x": 1,
+                    "y": 0,
+                    "z": 0
+                },
+                "length": params["cabin"]["length"]["axis_dis"] - params["window"]["width"]["axis_dis"] * max(
+                    params["window"]["right"]["locate"])
+            }
+            part_id = gen_id(beam)
+            info_params["sup_beam_right_wl"][part_id] = beam
+        if len(gap_list) == 0:
+            pass
+        else:
+            # 此时窗户之间存在间隙
+            for i in range(len(gap_list)):
+                for k in range(params["sup"]["mid"]["num"]):
+                    beam = {
+                        "type": params["parts"]["cir_sup_beam"]["type"],
+                        "center_coord": {
+                            "x": (gap_list[i]-1) * params["window"]["width"]["axis_dis"] + params["window"]["width"]["axis_dis"] / 2,
+                            "y": params["window"]["ground_clear"]["axis_dis"] + (k + 1) * params["sup"]["mid"]["gap"],
+                            "z": 0.0
+                        },
+                        "dir": {
+                            "x": 1,
+                            "y": 0,
+                            "z": 0
+                        },
+                        "length": params["window"]["width"]["axis_dis"]
+                    }
+                    part_id = gen_id(beam)
+                    info_params["sup_beam_right_wm"][part_id] = beam
 
     # 接下来统计舱体左侧，这种情况跟上面的情况差不多
     if params["window"]["left"]["num"] == 0:
@@ -1391,13 +1551,13 @@ def update_parts_info(params, info_params):
             }
             part_id = gen_id(beam)
             info_params["sup_beam_left"][part_id] = beam
-    else:
+    elif params["window"]["left"]["num"] == 1:
         # 此时存在窗户，需要分别按照窗户两端进行统计，首先统计左边
         for i in range(params["sup"]["mid"]["num"]):
             beam = {
                 "type": params["parts"]["cir_sup_beam"]["type"],
                 "center_coord": {
-                    "x": (params["window"]["left"]["locate"]-1)*params["window"]["width"]["axis_dis"]/2,
+                    "x": (max(params["window"]["left"]["locate"])-1)*params["window"]["width"]["axis_dis"]/2,
                     "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
                     "z": params["cabin"]["width"]["axis_dis"]
                 },
@@ -1406,7 +1566,7 @@ def update_parts_info(params, info_params):
                     "y": 0,
                     "z": 0
                 },
-                "length": (params["window"]["left"]["locate"]-1)*params["window"]["width"]["axis_dis"]
+                "length": (max(params["window"]["left"]["locate"])-1)*params["window"]["width"]["axis_dis"]
             }
             part_id = gen_id(beam)
             info_params["sup_beam_left_wl"][part_id] = beam
@@ -1415,7 +1575,7 @@ def update_parts_info(params, info_params):
             beam = {
                 "type": params["parts"]["cir_sup_beam"]["type"],
                 "center_coord": {
-                    "x": (params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["left"]["locate"])/2+params["window"]["width"]["axis_dis"]*params["window"]["left"]["locate"],
+                    "x": (params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"]))/2+params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"]),
                     "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
                     "z": params["cabin"]["width"]["axis_dis"]
                 },
@@ -1424,10 +1584,72 @@ def update_parts_info(params, info_params):
                     "y": 0,
                     "z": 0
                 },
-                "length": params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["left"]["locate"]
+                "length": params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"])
             }
             part_id = gen_id(beam)
             info_params["sup_beam_left_wr"][part_id] = beam
+    elif params["window"]["left"]["num"] >= 2:
+        # 此时还是要讨论空隙数量，没有空隙最好
+        gap_list = window.find_gap_locate(params["window"]["left"]["locate"])
+        # 无论窗户之间有没有缝隙，左右两侧的都是要统计的
+        for i in range(params["sup"]["mid"]["num"]):
+            # 首先统计窗户左侧
+            beam = {
+                "type": params["parts"]["cir_sup_beam"]["type"],
+                "center_coord": {
+                    "x": (min(params["window"]["left"]["locate"])-1)*params["window"]["width"]["axis_dis"]/2,
+                    "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
+                    "z": params["cabin"]["width"]["axis_dis"]
+                },
+                "dir": {
+                    "x": 1,
+                    "y": 0,
+                    "z": 0
+                },
+                "length": (min(params["window"]["left"]["locate"])-1)*params["window"]["width"]["axis_dis"]
+            }
+            part_id = gen_id(beam)
+            info_params["sup_beam_left_wl"][part_id] = beam
+
+            # 再统计窗户右侧
+            beam = {
+                "type": params["parts"]["cir_sup_beam"]["type"],
+                "center_coord": {
+                    "x": (params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"]))/2+params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"]),
+                    "y": params["window"]["ground_clear"]["axis_dis"] + (i + 1) * params["sup"]["mid"]["gap"],
+                    "z": params["cabin"]["width"]["axis_dis"]
+                },
+                "dir": {
+                    "x": 1,
+                    "y": 0,
+                    "z": 0
+                },
+                "length": params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"])
+            }
+            part_id = gen_id(beam)
+            info_params["sup_beam_left_wr"][part_id] = beam
+        if len(gap_list) == 0:
+            pass
+        else:
+            # 此时窗户之间存在间隙
+            for i in range(len(gap_list)):
+                for k in range(params["sup"]["mid"]["num"]):
+                    beam = {
+                        "type": params["parts"]["cir_sup_beam"]["type"],
+                        "center_coord": {
+                            "x": (gap_list[i]-1) * params["window"]["width"]["axis_dis"] + params["window"]["width"]["axis_dis"] / 2,
+                            "y": params["window"]["ground_clear"]["axis_dis"] + (k + 1) * params["sup"]["mid"]["gap"],
+                            "z": params["cabin"]["width"]["axis_dis"]
+                        },
+                        "dir": {
+                            "x": 1,
+                            "y": 0,
+                            "z": 0
+                        },
+                        "length": params["window"]["width"]["axis_dis"]
+                    }
+                    part_id = gen_id(beam)
+                    info_params["sup_beam_left_wm"][part_id] = beam
 
     # 接下来统计舱体对侧，还是要区分有没有窗户
     if params["window"]["offside"]["num"] == 0:
@@ -1505,7 +1727,7 @@ def update_parts_info(params, info_params):
             n = int(num / 2)
             # 计算距离差值
             d = params["cabin"]["width"]["axis_dis"] - params["equip"]["length"]["axis_dis"] - \
-                params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["dis"]["value"]
+                params["dis"]["offside"]["axis_gap"]["axis_gap"] - (num - 2) / 2 * params["window"]["width"]["axis_dis"]
             if d <= 200.0:
                 # 此时不可以外延
                 n = int(n - 1)

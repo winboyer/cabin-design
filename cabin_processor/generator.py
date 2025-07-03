@@ -1,3 +1,5 @@
+import copy
+
 from cabin_processor.param_validation import ParamValidationError
 import cabin_script.compute as compute
 import cabin_script.beam as beam
@@ -9,7 +11,7 @@ import cabin_script.parts as parts
 import cabin_script.copy_model as copy_model
 import cabin_result.material_summary as summary
 from typing import Dict, Any, List
-import os, json
+import os, json, math
 
 # 脚本生成
 class Generator:
@@ -105,11 +107,8 @@ class Generator:
         }
     },
     "dis": {
-        "value": 1200.0,
         "side": {
             "num": 8,
-            "left_locate": 5,
-            "right_locate": 4,
             "axis_gap": 1350.0,
             "description": "num指的是面内不包含两端的侧面柱个数，axis_gap为留余宽度，locate用于定位窗户处于哪一个位置，值不能等于1"
         },
@@ -168,11 +167,11 @@ class Generator:
         },
         "right": {
             "num": 1,
-            "locate": 4
+            "locate": [4]
         },
         "left": {
             "num": 1,
-            "locate": 5
+            "locate": [5]
         },
         "offside": {
             "num": 1
@@ -224,6 +223,8 @@ class Generator:
         }
     }
 }
+        # 直接更新截面参数
+        self.params = compute.update_profile(self.params)
         self._pass_params(params)
 
         # 执行参数校验
@@ -233,6 +234,7 @@ class Generator:
 
         # 以下是公共属性
         self.parts_info = {} # 切分前的所有构件的信息
+        self.parts_info_copy = {} # 用于检测
         self.section = {
             "main_beam_column": section[0],
             "cir_main_column": section[1],
@@ -267,11 +269,13 @@ class Generator:
             "sup_beam_ew_top": {},
             "sup_beam_left": {},
             "sup_beam_left_wl": {},
+            "sup_beam_left_wm": {},
             "sup_beam_left_wr": {},
             "sup_beam_offside": {},
             "sup_beam_offside_w": {},
             "sup_beam_right": {},
             "sup_beam_right_wl": {},
+            "sup_beam_right_wm": {},
             "sup_beam_right_wr": {},
             "sup_beam_top": {}
         } # 只用于与有限元模型对照
@@ -289,35 +293,43 @@ class Generator:
         script_path = os.path.join(self.params["output"]["dir"], "cube.py")
         with open(script_path, "w", encoding="utf-8") as f:
             f.write(self.script)
+
+        parts_info_path = os.path.join(self.params["output"]["dir"], "parts_info_copy.json")
+        with open(parts_info_path, "w", encoding="utf-8") as f:
+            json.dump(self.parts_info_copy, f, ensure_ascii=False, indent=4)  # type: ignore[arg-type]
+
         self._write_to_json()
 
     # 用于传递传入的参数，计算其余参数
     def _pass_params(self, params) -> None:
 
+        # 传入用户输入
         self.params["cabin"]["length"]["value"] = float(params["cabin_length"])
-
         self.params["window"]["width"]["value"] = float(params["window"]["width"])
-        self.params["window"]["right"]["num"] = params["window"]["right"]["num"]
-        self.params["window"]["left"]["num"] = params["window"]["left"]["num"]
         self.params["window"]["offside"]["num"] = params["window"]["offside"]["num"]
-
         self.params["window"]["right"]["locate"] = params["window"]["right"]["locate"]
         self.params["window"]["left"]["locate"] = params["window"]["left"]["locate"]
         self.params["output"]["dir"] = params["work_path"]
 
-        self.params["dis"]["side"]["left_locate"] = self.params["window"]["left"]["locate"]
-        self.params["dis"]["side"]["right_locate"] = self.params["window"]["right"]["locate"]
+        self.params["window"]["right"]["num"] = len(self.params["window"]["right"]["locate"])
+        self.params["window"]["left"]["num"] = len(self.params["window"]["left"]["locate"])
 
-        # 自动设置梁间距
+        # 更新轴向距离
+        self.params = compute.update_axis_dis(self.params)
+
+        # 更新侧面柱子的数量以及间距
+        self.params = compute.update_cir_main(self.params)
+
+        # 自动设置支撑梁布置
         self._set_sup_beam()
 
-        self.params = compute.update_profile(self.params)
-        self.params = compute.update_cir_main(self.params)
+        self.params = compute.update_sup_beam_dis(self.params)
 
     # 用于切分构件获取梁单元切向信息
     def _split_parts(self) -> None:
 
         self._parts_info = compute.update_parts_info(self.params, self._parts_info)
+        self.parts_info_copy = copy.deepcopy(self._parts_info)
         self.parts_info = beam.sort_all_parts(self._parts_info) # 去除外层嵌套
         self.parts_info = compute.update_offset(self.params, self.parts_info) # 添加构件偏置信息
         self.parts_info = compute.update_priority(self.parts_info)
@@ -367,7 +379,7 @@ class Generator:
         l = assembly.gen_assem_all_parts(self.params, self.parts_info_processed)
         m = beam.gen_all_parts_dir(self._processed_dict, self.params)
         n = job.gen_mesh(50.0) + assembly.gen_assem_plate(self.params) + assembly.gen_tie()
-        o = job.gen_bc(self.params) + job.gen_step() + load.gen_load_g(self.params) + job.gen_job(cpu_num) + load.gen_surf(self.params)
+        o = job.gen_bc(self.params) + job.gen_step() + load.gen_load_g() + job.gen_job(cpu_num) + load.gen_surf(self.params)
         p = load.gen_pressure(self.params) + load.gen_dead_live_load(self.params) + job.gen_node_element_set()
         q = copy_model.copy_model(self.params, cpu_num)
         self.script = a + b + c + d + e + f + g + h + i + j + k + l + m + n + o + p + q
@@ -376,13 +388,13 @@ class Generator:
     @staticmethod
     def _check_input_params(input_params: Dict[str, Any]) -> List[str]:
         errors: List[str] = []
+
         # cabin_length: 长度，必须为正整数
         if "cabin_length" not in input_params:
             errors.append("缺少 'cabin_length' 参数。")
         else:
             val = input_params["cabin_length"]
             try:
-                # 先尝试转换为整数
                 cabin_length = int(val)
                 if cabin_length <= 0:
                     errors.append(f"'cabin_length' 必须为正整数 (>0)，当前值: {val}")
@@ -408,45 +420,30 @@ class Generator:
                 except (ValueError, TypeError):
                     errors.append(f"'window.width' 必须是可转换为整数的值，且为正整数 (>0)；当前值: {val}")
 
-            # 通用函数：检查 side 字段
-            def check_side(side_name: str):
-                side = window.get(side_name)
-                if side is None:
-                    errors.append(f"缺少 'window.{side_name}' 字段，应为 dict。")
-                    return
-                if not isinstance(side, dict):
-                    errors.append(f"'window.{side_name}' 格式不正确，应为 dict。")
-                    return
-                # num: 数量，必须为整型且 >= 0
-                if "num" not in side:
-                    errors.append(f"缺少 'window.{side_name}.num' 参数。")
-                    return
-                num_val = side["num"]
-                try:
-                    num_int = int(num_val)
-                    if num_int < 0:
-                        errors.append(f"'window.{side_name}.num' 必须为非负整数 (>=0)，当前值: {num_val}")
-                except (ValueError, TypeError):
-                    errors.append(
-                        f"'window.{side_name}.num' 必须是可转换为整数的值，且为非负整数 (>=0)；当前值: {num_val}")
-                    return
-                # 如果 num == 1，需要 locate：定位值，必须为整型且 >0
-                if num_int == 1:
-                    if "locate" not in side:
-                        errors.append(f"当 'window.{side_name}.num' 为 1 时，缺少 'window.{side_name}.locate' 参数。")
+            # 检查 'left' 和 'right' 字段，必须有 'locate' 列表且每个元素为正整数
+            for side in ["left", "right"]:
+                if side in window:
+                    loc = window[side].get("locate")
+                    if loc is None:
+                        errors.append(f"缺少 '{side}.locate' 参数，应该是一个列表。")
+                    elif not isinstance(loc, list):
+                        errors.append(f"'{side}.locate' 应该是一个列表，当前类型: {type(loc).__name__}。")
                     else:
-                        loc_val = side["locate"]
-                        try:
-                            loc_int = int(loc_val)
-                            if loc_int <= 0:
-                                errors.append(f"'window.{side_name}.locate' 必须为正整数 (>0)，当前值: {loc_val}")
-                        except (ValueError, TypeError):
-                            errors.append(
-                                f"'window.{side_name}.locate' 必须是可转换为整数的值，且为正整数 (>0)；当前值: {loc_val}")
+                        # 检查列表中的每个元素是否为正整数
+                        for index, value in enumerate(loc):
+                            if not isinstance(value, int) or value <= 0:
+                                errors.append(
+                                    f"'{side}.locate' 列表中的第 {index + 1} 个值必须是正整数，当前值: {value}")
 
-            check_side("offside")
-            check_side("left")
-            check_side("right")
+            # 检查 'offside' 字段
+            if "offside" in window:
+                offside = window["offside"]
+                if "num" not in offside:
+                    errors.append("缺少 'window.offside.num' 参数。")
+                else:
+                    num = offside["num"]
+                    if not isinstance(num, int) or num < 0:
+                        errors.append(f"'window.offside.num' 必须是非负整数，当前值: {num}")
 
         # 检查 work_path，必须为字符串，且路径存在
         if "work_path" not in input_params:
@@ -458,9 +455,8 @@ class Generator:
             else:
                 if not os.path.exists(wp):
                     errors.append(f"'work_path' 对应的路径不存在: {wp}，请创建")
-
                 elif not os.path.isdir(wp):
-                   errors.append(f"'work_path' 应当是一个目录，但不是: {wp}")
+                    errors.append(f"'work_path' 应当是一个目录，但不是: {wp}")
 
         return errors
 
@@ -486,28 +482,17 @@ class Generator:
             if width > 866.0:
                 errors.append("当舱体对侧布置三扇窗户时，窗户宽度只能位于 350.0mm ~ 866.0mm 之间，请修改。")
 
+        # 3. 提前计算可用跨数，检测窗户列表是否正确
+        d = self.params["window"]["width"]["axis_dis"]
+        side_l = self.params["cabin"]["length"]["axis_dis"] - self.params["equip"]["width"]["axis_dis"]
+        side_n = math.floor((side_l - 200.0) / d)
+        if max(self.params["window"]["right"]["locate"]) > side_n or min(self.params["window"]["right"]["locate"]) < 2:
+            errors.append("右侧窗户布置位置存在错误")
+        if max(self.params["window"]["left"]["locate"]) > side_n or min(self.params["window"]["left"]["locate"]) < 2:
+            errors.append("左侧窗户布置位置存在错误")
 
-        # 3. 检测左侧窗户数量与定位
-        left_num = self.params["window"]["left"]["num"]
-        if left_num not in [0, 1]:
-            errors.append("左侧窗户只能为0或1，请修改")
-        if left_num != 0:
-            left_loc = self.params["dis"]["side"]["left_locate"]
-            max_side = self.params["dis"]["side"]["num"]
-            if not (2 <= left_loc <= max_side):
-                errors.append(f"左侧窗户定位只能选择 2 ~ {max_side}，请重新选择。")
 
-        # 4. 右侧窗户定位
-        right_num = self.params["window"]["right"]["num"]
-        if right_num not in [0, 1]:
-            errors.append("右侧窗户只能为0或1，请修改")
-        if right_num != 0:
-            right_loc = self.params["dis"]["side"]["right_locate"]
-            max_side = self.params["dis"]["side"]["num"]
-            if not (2 <= right_loc <= max_side):
-                errors.append(f"右侧窗户定位只能选择 2 ~ {max_side}，请重新选择。")
-
-        # 5. 其他校验：检查 output.dir 是否存在
+        # 4. 其他校验：检查 output.dir 是否存在
         try:
             out_dir = self.params["output"]["dir"]
             if not isinstance(out_dir, str) or not out_dir:
@@ -525,8 +510,8 @@ class Generator:
         # 接下来记录变化的值，只需要取两者之间的最大值
         # 挨着门的那一侧
         win_left_change = (self.params["cabin"]["length"]["axis_dis"] - self.params["equip"]["width"]["axis_dis"] -
-                          (self.params["dis"]["side"]["num"] * self.params["dis"]["value"]))
-        changes = max(win_left_change, self.params["dis"]["value"])
+                          (self.params["dis"]["side"]["num"] * self.params["window"]["width"]["axis_dis"]))
+        changes = max(win_left_change, self.params["window"]["width"]["axis_dis"])
 
         # 以下说的都是轴线距离，是窗宽加上150mm
         # 当窗宽超过750的时候，需要在顶部中间添加支撑梁
@@ -542,7 +527,6 @@ class Generator:
 
         # 对于顶部边缘，只需要跟顶部中间的宽度限值进行比较然即可
         # 顶部边缘
-        top_edge_fixed = self.params["cabin"]["width"]["axis_dis"] - self.params["dis"]["offside"]["axis_gap"][
-            "axis_gap"]
+        top_edge_fixed = self.params["dis"]["offside"]["axis_gap"]["axis_gap"]
         if top_edge_fixed>= 900.0:
             self.params["sup"]["top_side"]["num"] = 1

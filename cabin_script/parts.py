@@ -394,6 +394,27 @@ p.SectionAssignment(region=region, sectionName='{params["parts"]["cir_main_beam"
     thicknessAssignment=FROM_SECTION)
 """
     window_plate_s = f"""
+# 创建窗户间隙之间的钢板    
+s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__', 
+    sheetSize=10000.0)
+g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
+s.setPrimaryObject(option=STANDALONE)
+s.rectangle(point1=(0.0, 0.0), point2=({params["window"]["width"]["axis_dis"]}, {params["cabin"]["height"]["axis_dis"]}))
+p = mdb.models['Model-1'].Part(name='plate_window_gap', dimensionality=THREE_D, 
+    type=DEFORMABLE_BODY)
+p = mdb.models['Model-1'].parts['plate_window_gap']
+p.BaseShell(sketch=s)
+s.unsetPrimaryObject()
+p = mdb.models['Model-1'].parts['plate_window_gap']
+del mdb.models['Model-1'].sketches['__profile__']
+p = mdb.models['Model-1'].parts['plate_window_gap']
+f = p.faces
+faces = f.findAt((({params["window"]["width"]["axis_dis"]/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
+region = regionToolset.Region(faces=faces)
+p = mdb.models['Model-1'].parts['plate_window_gap']
+p.SectionAssignment(region=region, sectionName='plate', offset=0.0, 
+    offsetType=MIDDLE_SURFACE, offsetField='', 
+    thicknessAssignment=FROM_SECTION)
 # 创建窗户位置的钢板
 s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__', 
     sheetSize=10000.0)
@@ -551,6 +572,26 @@ p.SectionAssignment(region=region, sectionName='{params["parts"]["cir_secd_beam"
     thicknessAssignment=FROM_SECTION)
 """
     sup_beam_s = f"""
+# 窗户宽度范围内单位长度的环向支撑梁
+s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__', 
+    sheetSize=10000.0)
+g, v, d, c = s1.geometry, s1.vertices, s1.dimensions, s1.constraints
+s1.setPrimaryObject(option=STANDALONE)
+s1.Line(point1=(0.0, 0.0), point2=({params["window"]["width"]["axis_dis"]}, 0.0))
+s1.HorizontalConstraint(entity=g[2], addUndoState=False)
+p = mdb.models['Model-1'].Part(name='sup_beam_wg', dimensionality=THREE_D, 
+    type=DEFORMABLE_BODY)
+p = mdb.models['Model-1'].parts['sup_beam_wg']
+p.BaseWire(sketch=s1)
+s1.unsetPrimaryObject()
+p = mdb.models['Model-1'].parts['sup_beam_wg']
+del mdb.models['Model-1'].sketches['__profile__']
+e = p.edges
+edges = e.getSequenceFromMask(mask=('[#1 ]', ), )
+region = regionToolset.Region(edges=edges)
+p.SectionAssignment(region=region, sectionName='{params["parts"]["cir_sup_beam"]["type"]}', offset=0.0, 
+    offsetType=MIDDLE_SURFACE, offsetField='', 
+    thicknessAssignment=FROM_SECTION)
 # 设备间长度方向的环向支撑梁
 s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__', 
     sheetSize=10000.0)
@@ -640,7 +681,7 @@ s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s1.geometry, s1.vertices, s1.dimensions, s1.constraints
 s1.setPrimaryObject(option=STANDALONE)
-s1.Line(point1=(0.0, 0.0), point2=({(params["window"]["left"]["locate"]-1)*params["dis"]["value"]}, 0.0))
+s1.Line(point1=(0.0, 0.0), point2=({(min(params["window"]["left"]["locate"])-1)*params["window"]["width"]["axis_dis"]}, 0.0))
 s1.HorizontalConstraint(entity=g[2], addUndoState=False)
 p = mdb.models['Model-1'].Part(name='sup_beam_left_wl', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
@@ -661,7 +702,7 @@ s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s1.geometry, s1.vertices, s1.dimensions, s1.constraints
 s1.setPrimaryObject(option=STANDALONE)
-s1.Line(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-params["window"]["left"]["locate"]*params["dis"]["value"]}, 0.0))
+s1.Line(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-params["equip"]["width"]["axis_dis"]-max(params["window"]["left"]["locate"])*params["window"]["width"]["axis_dis"]}, 0.0))
 s1.HorizontalConstraint(entity=g[2], addUndoState=False)
 p = mdb.models['Model-1'].Part(name='sup_beam_left_wr', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
@@ -703,7 +744,7 @@ s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s1.geometry, s1.vertices, s1.dimensions, s1.constraints
 s1.setPrimaryObject(option=STANDALONE)
-s1.Line(point1=(0.0, 0.0), point2=({(params["cabin"]["width"]["axis_dis"]-params["window"]["offside"]["num"]*params["dis"]["value"])/2}, 0.0))
+s1.Line(point1=(0.0, 0.0), point2=({(params["cabin"]["width"]["axis_dis"]-params["window"]["offside"]["num"]*params["window"]["width"]["axis_dis"])/2}, 0.0))
 s1.HorizontalConstraint(entity=g[2], addUndoState=False)
 p = mdb.models['Model-1'].Part(name='sup_beam_offside_w', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
@@ -787,7 +828,7 @@ s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s1.geometry, s1.vertices, s1.dimensions, s1.constraints
 s1.setPrimaryObject(option=STANDALONE)
-s1.Line(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-params["window"]["right"]["locate"]*params["dis"]["value"]}, 0.0))
+s1.Line(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-max(params["window"]["right"]["locate"])*params["window"]["width"]["axis_dis"]}, 0.0))
 s1.HorizontalConstraint(entity=g[2], addUndoState=False)
 p = mdb.models['Model-1'].Part(name='sup_beam_right_wl', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
@@ -808,7 +849,7 @@ s1 = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s1.geometry, s1.vertices, s1.dimensions, s1.constraints
 s1.setPrimaryObject(option=STANDALONE)
-s1.Line(point1=(0.0, 0.0), point2=({(params["window"]["right"]["locate"]-1)*params["dis"]["value"]}, 0.0))
+s1.Line(point1=(0.0, 0.0), point2=({(min(params["window"]["right"]["locate"])-1)*params["window"]["width"]["axis_dis"]}, 0.0))
 s1.HorizontalConstraint(entity=g[2], addUndoState=False)
 p = mdb.models['Model-1'].Part(name='sup_beam_right_wr', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
@@ -943,7 +984,7 @@ s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
 s.setPrimaryObject(option=STANDALONE)
-s.rectangle(point1=(0.0, 0.0), point2=({params["window"]["width"]["axis_dis"]*(params["window"]["left"]["locate"]-1)}, {params["cabin"]["height"]["axis_dis"]}))
+s.rectangle(point1=(0.0, 0.0), point2=({params["window"]["width"]["axis_dis"]*(min(params["window"]["left"]["locate"])-1)}, {params["cabin"]["height"]["axis_dis"]}))
 p = mdb.models['Model-1'].Part(name='plate_l_wl', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
 p = mdb.models['Model-1'].parts['plate_l_wl']
@@ -953,7 +994,7 @@ p = mdb.models['Model-1'].parts['plate_l_wl']
 del mdb.models['Model-1'].sketches['__profile__']
 p = mdb.models['Model-1'].parts['plate_l_wl']
 f = p.faces
-faces = f.findAt((({(params["window"]["width"]["axis_dis"]*(params["window"]["left"]["locate"]-1))/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
+faces = f.findAt((({(params["window"]["width"]["axis_dis"]*(min(params["window"]["left"]["locate"])-1))/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
 region = regionToolset.Region(faces=faces)
 p = mdb.models['Model-1'].parts['plate_l_wl']
 p.SectionAssignment(region=region, sectionName='plate', offset=0.0, 
@@ -964,7 +1005,7 @@ s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
 s.setPrimaryObject(option=STANDALONE)
-s.rectangle(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["left"]["locate"]-params["equip"]["width"]["axis_dis"]}, {params["cabin"]["height"]["axis_dis"]}))
+s.rectangle(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"])-params["equip"]["width"]["axis_dis"]}, {params["cabin"]["height"]["axis_dis"]}))
 p = mdb.models['Model-1'].Part(name='plate_l_wr', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
 p = mdb.models['Model-1'].parts['plate_l_wr']
@@ -974,7 +1015,7 @@ p = mdb.models['Model-1'].parts['plate_l_wr']
 del mdb.models['Model-1'].sketches['__profile__']
 p = mdb.models['Model-1'].parts['plate_l_wr']
 f = p.faces
-faces = f.findAt((({(params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["left"]["locate"]-params["equip"]["width"]["axis_dis"])/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
+faces = f.findAt((({(params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["left"]["locate"])-params["equip"]["width"]["axis_dis"])/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
 region = regionToolset.Region(faces=faces)
 p = mdb.models['Model-1'].parts['plate_l_wr']
 p.SectionAssignment(region=region, sectionName='plate', offset=0.0, 
@@ -1010,7 +1051,7 @@ s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
 s.setPrimaryObject(option=STANDALONE)
-s.rectangle(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["right"]["locate"]}, {params["cabin"]["height"]["axis_dis"]}))
+s.rectangle(point1=(0.0, 0.0), point2=({params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["right"]["locate"])}, {params["cabin"]["height"]["axis_dis"]}))
 p = mdb.models['Model-1'].Part(name='plate_r_wl', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
 p = mdb.models['Model-1'].parts['plate_r_wl']
@@ -1020,7 +1061,7 @@ p = mdb.models['Model-1'].parts['plate_r_wl']
 del mdb.models['Model-1'].sketches['__profile__']
 p = mdb.models['Model-1'].parts['plate_r_wl']
 f = p.faces
-faces = f.findAt((({(params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*params["window"]["right"]["locate"])/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
+faces = f.findAt((({(params["cabin"]["length"]["axis_dis"]-params["window"]["width"]["axis_dis"]*max(params["window"]["right"]["locate"]))/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
 region = regionToolset.Region(faces=faces)
 p = mdb.models['Model-1'].parts['plate_r_wl']
 p.SectionAssignment(region=region, sectionName='plate', offset=0.0, 
@@ -1031,7 +1072,7 @@ s = mdb.models['Model-1'].ConstrainedSketch(name='__profile__',
     sheetSize=10000.0)
 g, v, d, c = s.geometry, s.vertices, s.dimensions, s.constraints
 s.setPrimaryObject(option=STANDALONE)
-s.rectangle(point1=(0.0, 0.0), point2=({params["window"]["width"]["axis_dis"]*(params["window"]["right"]["locate"]-1)}, {params["cabin"]["height"]["axis_dis"]}))
+s.rectangle(point1=(0.0, 0.0), point2=({params["window"]["width"]["axis_dis"]*(min(params["window"]["right"]["locate"])-1)}, {params["cabin"]["height"]["axis_dis"]}))
 p = mdb.models['Model-1'].Part(name='plate_r_wr', dimensionality=THREE_D, 
     type=DEFORMABLE_BODY)
 p = mdb.models['Model-1'].parts['plate_r_wr']
@@ -1041,7 +1082,7 @@ p = mdb.models['Model-1'].parts['plate_r_wr']
 del mdb.models['Model-1'].sketches['__profile__']
 p = mdb.models['Model-1'].parts['plate_r_wr']
 f = p.faces
-faces = f.findAt((({(params["window"]["width"]["axis_dis"]*(params["window"]["right"]["locate"]-1))/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
+faces = f.findAt((({(params["window"]["width"]["axis_dis"]*(min(params["window"]["right"]["locate"])-1))/2}, {params["cabin"]["height"]["axis_dis"]/2}, 0.0), ))
 region = regionToolset.Region(faces=faces)
 p = mdb.models['Model-1'].parts['plate_r_wr']
 p.SectionAssignment(region=region, sectionName='plate', offset=0.0, 

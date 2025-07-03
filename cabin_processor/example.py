@@ -17,6 +17,6 @@ params = {
     "work_path": "F:\CAE\cube1"
 }
 
-import cabin_processor.submitter as p
+import cabin_processor.submitter_old as p
 a = p.Submitter(params)
 a.put_into_job()
